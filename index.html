@@ -103,13 +103,54 @@ function normalizeWarnings(value){
   if(typeof value==='string' && value.trim()) return value.split(/\n+/).map(x=>x.replace(/^[-•]\s*/,'').trim()).filter(Boolean);
   return [];
 }
+
+const MAX_AI_BODY_BYTES=4_000_000;
+function loadPhoto(data){
+  return new Promise((resolve,reject)=>{
+    const image=new Image();
+    image.onload=()=>resolve(image);
+    image.onerror=()=>reject(new Error('A photo could not be opened. Try adding it again as a JPEG or PNG.'));
+    image.src=data;
+  });
+}
+async function resizePhotoForAI(data,maxEdge=1600,quality=.82){
+  const image=await loadPhoto(data);
+  const scale=Math.min(1,maxEdge/Math.max(image.naturalWidth,image.naturalHeight));
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(image.naturalWidth*scale));
+  canvas.height=Math.max(1,Math.round(image.naturalHeight*scale));
+  const context=canvas.getContext('2d');
+  if(!context) throw new Error('Photo resizing is unavailable. Close and reopen the app.');
+  context.fillStyle='#fff';
+  context.fillRect(0,0,canvas.width,canvas.height);
+  context.drawImage(image,0,0,canvas.width,canvas.height);
+  const resized=canvas.toDataURL('image/jpeg',quality);
+  canvas.width=canvas.height=1;
+  return resized;
+}
+async function prepareAIRequest(lot,sourcePhotos){
+  // Keep original photos for display, backup and export.
+  for(const settings of [[1600,.82],[1280,.72],[1024,.62],[800,.55]]){
+    const images=[];
+    for(let i=0;i<sourcePhotos.length;i++){
+      const photo=sourcePhotos[i];
+      images.push({data:await resizePhotoForAI(photo.data,...settings),main:photo.main,order:i+1});
+    }
+    const body=JSON.stringify({lot,images});
+    if(new Blob([body]).size<=MAX_AI_BODY_BYTES) return body;
+  }
+  throw new Error('This lot has too many photos for one analysis. Remove some photos and try again.');
+}
+
 async function generateAIListing(){
   if(!photos.length){alert('Add at least one photo before AI analysis.');return}
   const btn=$('generateBtn'); btn.disabled=true; btn.textContent='Analyzing all photos…';
   $('aiStatus').textContent=`Reviewing ${photos.length} photo${photos.length===1?'':'s'} together…`;
   try{
-    const payload={lot:+$('lotNo').textContent,images:photos.map((p,i)=>({data:p.data,main:p.main,order:i+1}))};
-    const res=await fetch(AI_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    $('aiStatus').textContent='Preparing photos for analysis…';
+    const body=await prepareAIRequest(+$('lotNo').textContent,photos.slice());
+    $('aiStatus').textContent='Analyzing all photos…';
+    const res=await fetch(AI_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body});
     const x=await res.json().catch(()=>({}));
     if(!res.ok) throw new Error(x.error || ('AI service returned '+res.status));
     $('title').value=x.title||'';
@@ -188,3 +229,4 @@ addComp();
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
 </script>
 </body></html>
+
