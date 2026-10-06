@@ -1,11 +1,190 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#173f73"><link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icons/icon-192.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="CMB Cataloger"><title>CMB Auction Cataloger</title><link rel="stylesheet" href="app.css"></head><body>
-<header><div><strong>CMB Auction Cataloger</strong><small id="net">Checking connection…</small></div><button id="install" class="ghost hidden">Install App</button></header>
-<main>
-<section class="hero"><div><small>CURRENT LOT</small><h1>Lot <span id="lotNo">1</span></h1><p>New auctions always begin at Lot 1.</p></div><button id="newAuction" class="ghost">New Auction</button></section>
-<section class="card"><h2>Photos</h2><div class="actions"><label class="button primary">Take Photo<input id="camera" hidden type="file" accept="image/*" capture="environment"></label><label class="button">Add Photos<input id="picker" hidden type="file" accept="image/*" multiple></label></div><p class="muted">Press and drag a photo to reorder. Choose Set Main for the primary image.</p><div id="photos" class="photos"></div></section>
-<section class="card"><h2>AI Listing</h2><button id="generate" class="primary wide">Analyze All Photos & Generate Listing</button><p id="aiStatus" class="muted">AI service connection is a separate secure-backend step. Your editable fields and warnings are ready.</p><label>Title<input id="title"></label><label>Description<textarea id="description"></textarea></label><label>Maker / Markings<input id="markings"></label><label>Condition<textarea id="condition"></textarea></label><label>Verification Warnings<textarea id="warnings" placeholder="Uncertain markings, materials, gemstones, authenticity, age, damage, etc."></textarea></label></section>
-<section class="card"><h2>Estimated Auction Value</h2><div class="two"><label>Low estimate<input id="low" type="number" min="0" step=".01"></label><label>High estimate<input id="high" type="number" min="0" step=".01"></label></div><label>Valuation notes<input id="valuationNotes"></label><div class="rowTitle"><h3>Comparable Sales</h3><button id="addComp">+ Add</button></div><div id="comps"></div><p class="muted">Comparable-sale web research will require the secure online service. Manual source links and sale dates are stored now.</p></section>
-<section class="card"><h2>Auction Information</h2><label>Quantity<input id="qty" type="number" min="1" value="1"></label><label class="check"><input id="shipping" type="checkbox" checked> Shipping available</label></section>
-<section class="card"><h2>Save / Export</h2><div class="actions"><button id="save">Save Lot</button><button id="exportBackup">Export Backup</button><button id="exportCSV">Export CSV</button></div><p class="muted">On iPhone/iPad, use the Share/Save dialog to save exported files to Files, iCloud Drive, or another installed storage provider.</p></section>
-</main><footer><button id="saveNext" class="primary wide">SAVE & NEXT LOT →</button><small id="status"></small></footer>
-<script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#1d4ed8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="CMB Cataloger">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <title>CMB Auction Cataloger</title>
+  <style>
+    :root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#17202a;background:#f5f6f8}
+    *{box-sizing:border-box} body{margin:0}.app{max-width:900px;margin:auto;padding:16px}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .card{background:#fff;border-radius:16px;padding:16px;margin:14px 0;box-shadow:0 2px 12px #0001}
+    .lot{font-size:32px;font-weight:800}
+    button,.btn{border:0;border-radius:12px;padding:13px 16px;font-weight:700;font-size:16px;cursor:pointer}
+    button:disabled{opacity:.6;cursor:wait}.primary{background:#1d4ed8;color:white}.secondary{background:#e8edf5;color:#17202a}.danger{background:#fee2e2;color:#7f1d1d}
+    .row{display:flex;gap:10px;flex-wrap:wrap}.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:12px}
+    .photo{position:relative;border:2px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#eee;min-height:130px}.photo.main{border:3px solid #1d4ed8}
+    .photo img{width:100%;height:130px;object-fit:cover;display:block}.photo .actions{display:flex;gap:4px;padding:6px;background:white}.photo .actions button{padding:7px;font-size:12px;flex:1}
+    .badge{position:absolute;top:7px;left:7px;background:#1d4ed8;color:white;padding:4px 7px;border-radius:8px;font-size:12px}.drag{position:absolute;right:7px;top:7px;background:#fff;padding:3px 7px;border-radius:8px}
+    label{display:block;font-weight:700;margin:10px 0 5px}input,textarea{width:100%;padding:12px;border:1px solid #cfd5df;border-radius:10px;font:inherit}textarea{min-height:100px}
+    .est{display:grid;grid-template-columns:1fr 1fr;gap:12px}.footer{position:sticky;bottom:0;background:#f5f6f8ee;backdrop-filter:blur(8px);padding:10px 0}.saveNext{width:100%;font-size:19px;padding:16px}
+    .hint{font-size:13px;color:#667085}.comp{border-top:1px solid #eee;padding:10px 0}.warning{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px;margin:7px 0}
+    .aiStatus{margin-top:10px;padding:10px;border-radius:10px;background:#f8fafc}.hidden{display:none}.ok{background:#ecfdf3;color:#166534}
+    @media(max-width:600px){.lot{font-size:27px}.app{padding:12px}.top{align-items:flex-start;flex-direction:column}.est{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="app">
+  <div class="top">
+    <div><h2 style="margin:0">CMB Auction Cataloger</h2><div class="hint">Photo-based auction lot cataloging</div></div>
+    <div class="row">
+      <button class="secondary" onclick="exportData()">Export Backup</button>
+      <label class="btn secondary">Import Backup<input id="importFile" type="file" accept=".json" class="hidden"></label>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="justify-content:space-between;align-items:center">
+      <div><div class="hint">CURRENT LOT</div><div class="lot">Lot <span id="lotNo">1</span></div></div>
+      <div><label style="margin:0 0 5px">Starting lot</label><input id="startLot" type="number" value="1" min="1" style="width:120px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>📷 Photos</h3>
+    <div class="row">
+      <label class="btn primary">📷 Take Photo<input id="camera" type="file" accept="image/*" capture="environment" class="hidden"></label>
+      <label class="btn secondary">＋ Add Photos<input id="picker" type="file" accept="image/*" multiple class="hidden"></label>
+    </div>
+    <div class="hint" style="margin-top:8px">Add several views of the same lot. Drag to reorder. Tap “Set Main” for the primary image.</div>
+    <div id="photos" class="photos"></div>
+  </div>
+
+  <div class="card">
+    <h3>✨ AI Listing</h3>
+    <button id="generateBtn" class="primary" onclick="generateAIListing()">Analyze All Photos & Generate Listing</button>
+    <div id="aiStatus" class="aiStatus hint">Add photos, then analyze the entire lot together.</div>
+    <label>Title</label><input id="title" placeholder="Auction lot title">
+    <label>Description</label><textarea id="description" placeholder="Auction description"></textarea>
+    <label>Maker / Markings</label><input id="markings" placeholder="e.g. Avon, 925, 1/20 12K GF">
+    <label>Condition</label><textarea id="condition" placeholder="Condition notes"></textarea>
+    <label>Verification Warnings</label><div id="warnings"></div>
+    <textarea id="warningNotes" placeholder="AI warnings appear here and remain editable."></textarea>
+    <div class="hint">Review every AI-generated field before publishing your auction listing.</div>
+  </div>
+
+  <div class="card">
+    <h3>💰 Estimated Auction Value</h3>
+    <div class="est">
+      <div><label>Low estimate</label><input id="low" type="number" min="0" step=".01" placeholder="$"></div>
+      <div><label>High estimate</label><input id="high" type="number" min="0" step=".01" placeholder="$"></div>
+    </div>
+    <label>Confidence / valuation notes</label><input id="valuationNotes" placeholder="Comparable sales, condition differences, etc.">
+    <h4>Comparable Sales</h4><div id="comps"></div><button class="secondary" onclick="addComp()">＋ Add Comparable</button>
+  </div>
+
+  <div class="card"><h3>Auction Information</h3><label>Quantity</label><input id="qty" type="number" min="1" value="1"><label><input id="shipping" type="checkbox" checked style="width:auto"> Shipping available</label></div>
+
+  <div class="footer">
+    <div class="row"><button class="secondary" onclick="saveLot(false)">Save Lot</button><button class="danger" onclick="clearCurrent()">Clear</button></div>
+    <button class="primary saveNext" onclick="saveLot(true)" style="margin-top:8px">SAVE & NEXT LOT →</button>
+    <div id="status" class="hint" style="text-align:center;margin-top:6px"></div>
+  </div>
+</div>
+
+<script>
+let photos=[], lots={}, dragIndex=null;
+const $=id=>document.getElementById(id);
+const fields=['title','description','markings','condition','warningNotes','low','high','valuationNotes','qty'];
+const AI_ENDPOINT='/.netlify/functions/analyze';
+
+function renderWarnings(items=[]){
+  const box=$('warnings'); box.innerHTML='';
+  items.filter(Boolean).forEach(w=>{const d=document.createElement('div');d.className='warning';d.textContent='⚠️ '+w;box.appendChild(d)});
+}
+function normalizeWarnings(value){
+  if(Array.isArray(value)) return value.filter(Boolean);
+  if(typeof value==='string' && value.trim()) return value.split(/\n+/).map(x=>x.replace(/^[-•]\s*/,'').trim()).filter(Boolean);
+  return [];
+}
+async function generateAIListing(){
+  if(!photos.length){alert('Add at least one photo before AI analysis.');return}
+  const btn=$('generateBtn'); btn.disabled=true; btn.textContent='Analyzing all photos…';
+  $('aiStatus').textContent=`Reviewing ${photos.length} photo${photos.length===1?'':'s'} together…`;
+  try{
+    const payload={lot:+$('lotNo').textContent,images:photos.map((p,i)=>({data:p.data,main:p.main,order:i+1}))};
+    const res=await fetch(AI_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const x=await res.json().catch(()=>({}));
+    if(!res.ok) throw new Error(x.error || ('AI service returned '+res.status));
+    $('title').value=x.title||'';
+    $('description').value=x.description||'';
+    $('markings').value=x.maker_markings||x.markings||'';
+    $('condition').value=x.condition||'';
+    const ws=normalizeWarnings(x.warnings);
+    renderWarnings(ws); $('warningNotes').value=ws.join('\n');
+    $('aiStatus').className='aiStatus hint ok';
+    $('aiStatus').textContent=`AI analyzed ${photos.length} photo${photos.length===1?'':'s'}. Review and edit every field before saving.`;
+  }catch(err){
+    $('aiStatus').className='aiStatus hint';
+    $('aiStatus').textContent='AI analysis failed: '+err.message;
+  }finally{btn.disabled=false;btn.textContent='Analyze All Photos & Generate Listing'}
+}
+function addFiles(files){
+  [...files].forEach(f=>{
+    if(!f.type.startsWith('image/')) return;
+    const r=new FileReader();
+    r.onload=()=>{photos.push({data:r.result,main:photos.length===0});renderPhotos()};
+    r.readAsDataURL(f);
+  });
+}
+$('camera').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+$('picker').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+function renderPhotos(){
+  let el=$('photos');el.innerHTML='';
+  photos.forEach((p,i)=>{
+    let d=document.createElement('div');d.className='photo '+(p.main?'main':'');d.draggable=true;
+    d.ondragstart=()=>dragIndex=i;d.ondragover=e=>e.preventDefault();d.ondrop=()=>{if(dragIndex===null)return;let x=photos.splice(dragIndex,1)[0];photos.splice(i,0,x);dragIndex=null;renderPhotos()};
+    d.innerHTML=`${p.main?'<span class="badge">MAIN</span>':''}<span class="drag">↕</span><img alt="Lot photo" src="${p.data}"><div class="actions"><button onclick="setMain(${i})">★ Set Main</button><button onclick="delPhoto(${i})">Delete</button></div>`;
+    el.appendChild(d);
+  });
+}
+function setMain(i){photos.forEach((p,j)=>p.main=j===i);renderPhotos()}
+function delPhoto(i){let was=photos[i]?.main;photos.splice(i,1);if(was&&photos[0])photos[0].main=true;renderPhotos()}
+function escAttr(v=''){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+function addComp(c={}){
+  let d=document.createElement('div');d.className='comp';
+  d.innerHTML=`<div class="row"><input class="cTitle" placeholder="Comparable item" value="${escAttr(c.title||'')}"><input class="cPrice" type="number" placeholder="Sold price" value="${escAttr(c.price||'')}"><input class="cDate" type="date" value="${escAttr(c.date||'')}"></div><input class="cSource" placeholder="Source link" value="${escAttr(c.source||'')}" style="margin-top:7px"><button class="danger" style="margin-top:7px" onclick="this.parentElement.remove()">Remove</button>`;
+  $('comps').appendChild(d)
+}
+function getComps(){return [...document.querySelectorAll('.comp')].map(d=>({title:d.querySelector('.cTitle').value,price:d.querySelector('.cPrice').value,date:d.querySelector('.cDate').value,source:d.querySelector('.cSource').value}))}
+function saveLot(next){
+  let n=+$('lotNo').textContent;
+  if(!photos.length&&!confirm('This lot has no photos. Save anyway?'))return;
+  let obj={lot:n,photos,comps:getComps(),shipping:$('shipping').checked};
+  fields.forEach(f=>obj[f]=$(f).value);
+  lots[n]=obj;
+  try{localStorage.setItem('cmbAuctionLots',JSON.stringify(lots));$('status').textContent=`Lot ${n} saved.`}
+  catch(e){$('status').textContent='Could not save all photos locally. Export a backup before leaving this page.'}
+  if(next){$('lotNo').textContent=n+1;$('startLot').value=n+1;resetForm()}
+}
+function resetForm(){
+  photos=[];renderPhotos();renderWarnings([]);
+  fields.forEach(f=>$(f).value=f==='qty'?'1':'');
+  $('shipping').checked=true;$('comps').innerHTML='';addComp();
+  $('aiStatus').className='aiStatus hint';$('aiStatus').textContent='Add photos, then analyze the entire lot together.'
+}
+function clearCurrent(){if(confirm('Clear this unsaved lot?'))resetForm()}
+$('startLot').onchange=e=>{
+  const n=Math.max(1,parseInt(e.target.value||'1',10));e.target.value=n;
+  if(confirm(`Start at lot ${n}?`)){$('lotNo').textContent=n;resetForm()} else e.target.value=$('lotNo').textContent;
+}
+function exportData(){
+  let blob=new Blob([JSON.stringify({lots,currentLot:+$('lotNo').textContent},null,2)],{type:'application/json'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download='CMB-Auction-Catalog-Backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)
+}
+$('importFile').onchange=e=>{
+  let f=e.target.files[0];if(!f)return;let r=new FileReader();
+  r.onload=()=>{try{let x=JSON.parse(r.result);lots=x.lots||{};let current=Math.max(1,parseInt(x.currentLot||1,10));$('lotNo').textContent=current;$('startLot').value=current;localStorage.setItem('cmbAuctionLots',JSON.stringify(lots));$('status').textContent='Backup imported.'}catch(err){alert('That backup file could not be read.')}};
+  r.readAsText(f);e.target.value=''
+}
+try{lots=JSON.parse(localStorage.getItem('cmbAuctionLots')||'{}')||{}}catch(e){lots={}}
+addComp();
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
+</script>
+</body></html>

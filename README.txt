@@ -1,30 +1,24 @@
-CMB Auction Cataloger PWA
+CMB AUCTION CATALOGER — READY TO UPLOAD
 
 WHAT IS INCLUDED
-- New auctions start at Lot 1.
-- Sequential Save & Next Lot numbering.
-- Multiple photos per lot.
-- Camera capture and photo picker.
-- Drag-to-reorder on desktop; photo ordering is preserved.
-- Set Main Photo and Delete controls.
-- Offline app shell via service worker.
-- Local auction storage in IndexedDB (better suited to photo-heavy lots than localStorage).
-- Editable title, description, maker/markings, condition and verification warnings.
-- Low/high estimates and manual comparable-sale records.
-- JSON backup export and CSV lot export.
+- index.html — the auction cataloger app
+- manifest.webmanifest — makes the site installable on iPhone/iPad
+- sw.js — basic offline app shell
+- icon-192.png and icon-512.png — Home Screen icons
+- netlify/functions/analyze.mjs — secure AI photo-analysis function
+- netlify.toml — Netlify configuration
 
-IMPORTANT: INSTALLING ON IPHONE/IPAD
-A PWA must be served from HTTPS (or localhost during development). Opening index.html directly from the Files app will not install the service worker/Home Screen PWA correctly.
-1. Upload the contents of this folder to any HTTPS web host you control.
-2. Open that HTTPS address in Safari on the iPhone/iPad.
-3. Tap Share > Add to Home Screen.
-4. Open CMB Cataloger from the Home Screen.
+IMPORTANT
+1. Upload the CONTENTS of this ZIP to a Netlify project (or connect the folder/repository to Netlify).
+2. In Netlify, add the environment variable:
+      OPENAI_API_KEY = your OpenAI API key
+   Keep it marked as secret/sensitive.
+3. Redeploy after adding the variable.
+4. Open the Netlify site URL in Safari on the iPad/iPhone.
+5. Use Share > Add to Home Screen.
 
-FILES / ICLOUD DRIVE EXPORT
-Use Export Backup or Export CSV. iOS will offer its normal download/share/save workflow, where the file can be moved/saved in Files, iCloud Drive, or another installed storage provider.
+The app starts at Lot 1.
+The API key is NOT stored in the browser or this ZIP.
+The AI button calls /.netlify/functions/analyze automatically.
 
-AI / ONLINE COMPARABLES
-The fields and workflow are present, but live AI photo analysis and online comparable-sale research need a secure server/backend. Do not place a private AI API key inside app.js or index.html.
-
-DATA SAFETY
-Local IndexedDB data is device/browser specific and can be lost if Safari website data is cleared. Export backups regularly, especially after a cataloging session.
+Note: GitHub Pages alone cannot run the included Netlify server function. If you publish only the static files to GitHub Pages, AI photo analysis will not work unless the frontend is changed to call a separately deployed backend.
