@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import analyze, { normalizeListing } from '../netlify/functions/analyze.mjs';
-const listing={title:'Used bag',low:10,high:25,valuationNotes:'Low confidence.',comps:[{title:'Similar bag',price:20,status:'sold',currency:'USD',date:'',source:'https://example.com/item'}]};
+const listing={title:'Used bag',low:10,high:25,valuationNotes:'Low confidence.',comps:[{title:'Similar bag',price:20,status:'sold',currency:'USD',condition_match:true,date:'',source:'https://example.com/item'}]};
 const data={output:[{type:'web_search_call',action:{sources:[{url:'https://example.com/item'}]}}]};
 test('preserves prices and missing dates, rejects unsupported comparable URLs',()=>{
  const x=normalizeListing({...listing,comps:[...listing.comps,{...listing.comps[0],source:'https://invented.test/item'}]},data);
@@ -27,4 +27,9 @@ test('provider request uses structured valuation output, images and source looku
  global.fetch=async(url,opts)=>{const b=JSON.parse(opts.body);assert.equal(b.text.format.schema.properties.low.type[0],'number');assert.equal(b.tools[0].type,'web_search');assert.ok(b.include.includes('web_search_call.action.sources'));assert.equal(b.input[0].content[1].type,'input_image');return Response.json({...data,output_text:JSON.stringify(listing)});};
  const r=await analyze(new Request('http://localhost',{method:'POST',body:JSON.stringify({images:['data:image/jpeg;base64,AA==']})}));assert.equal(r.status,200);const x=await r.json();assert.equal(x.high,25);assert.equal(x.comps.length,1);
  }finally{global.fetch=fetchBefore;if(keyBefore===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=keyBefore;}
+});
+
+test('rejects sealed or complete-set comparables for an incomplete parts lot',()=>{
+ const c=listing.comps[0];const x=normalizeListing({...listing,comps:[{...c,title:'New sealed LEGO set',condition_match:false}]},data);
+ assert.equal(x.comps.length,0);assert.match(x.valuationNotes,/No source-backed comparable/);
 });
