@@ -73,8 +73,7 @@
     <label>Description</label><textarea id="description" placeholder="Auction description"></textarea>
     <label>Maker / Markings</label><input id="markings" placeholder="e.g. Avon, 925, 1/20 12K GF">
     <label>Condition</label><textarea id="condition" placeholder="Condition notes"></textarea>
-    <label>Verification Warnings</label><div id="warnings"></div>
-    <textarea id="warningNotes" placeholder="AI warnings appear here and remain editable."></textarea>
+    <div hidden><div id="warnings"></div><textarea id="warningNotes"></textarea></div>
     <div class="hint">Review every AI-generated field before publishing your auction listing.</div>
   </div>
 
@@ -88,7 +87,7 @@
     <h4>Comparable Prices</h4><p class="hint">AI adds sources it found when available. Check each source; asking prices are not completed sales. Missing dates stay blank.</p><div id="comps"></div><button class="secondary" onclick="addComp();autoSave()">＋ Add Comparable</button>
   </div>
 
-  <div class="card"><h3>Auction Information</h3><label>Quantity</label><input id="qty" type="number" min="1" value="1"><label><input id="shipping" type="checkbox" checked style="width:auto"> Shipping available</label></div>
+  <div hidden><input id="qty" type="number" min="1" value="1"><input id="shipping" type="checkbox" checked></div>
 
   <div class="footer">
     <div class="row"><button class="secondary" onclick="saveLot(false)">Save Lot</button><button class="danger" onclick="clearCurrent()">Clear</button></div>
