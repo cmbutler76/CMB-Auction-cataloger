@@ -18,5 +18,9 @@ const second=run('auction.id');document.getElementById('title').value='Auction t
 await run(`$('auctionSelect').onchange({target:{value:${JSON.stringify(first)}}})`);assert.equal(document.getElementById('title').value,'Previous auction item');assert.equal(document.getElementById('description').value,'Edited without Save Lot');
 await run(`$('auctionSelect').onchange({target:{value:${JSON.stringify(second)}}})`);assert.equal(document.getElementById('lotNo').textContent,'2');await run('openLot(1)');assert.equal(document.getElementById('title').value,'Auction two lot one');
 ({ctx,document}=await boot());assert.equal(run('auction.id'),second);assert.equal(document.getElementById('title').value,'Auction two lot one');
+const originalTitle=document.getElementById('title').value;
+run("prepareAIRequest=async()=>JSON.stringify({images:[]});photos=[{data:'test-fixture',main:true}]");
+await run('generateAIListing(true)');await run('saveQueue');
+assert.equal(document.getElementById('title').value,originalTitle);assert.equal(document.getElementById('low').value,'10');assert.equal(document.getElementById('high').value,'20');
 run("CatalogStorage.save=async()=>{throw Error('quota')}");await run('saveLot(true)');assert.equal(document.getElementById('lotNo').textContent,'1');assert.equal(document.getElementById('title').value,'Auction two lot one');assert.match(document.getElementById('status').textContent,/SAVE FAILED/);
 console.log('PASS: legacy migration, unsaved edits restore after reopen, photos restore, auction isolation, numbering, saved lot reopening, active auction restore, failed save does not advance/clear.');

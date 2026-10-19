@@ -78,7 +78,7 @@
   </div>
 
   <div class="card">
-    <h3>💰 Estimated Auction Value (USD)</h3><p class="hint">AI fills a suggested resale range for the entire lot, before fees, tax and shipping. Review the estimate and source pages before saving.</p>
+    <h3>💰 Estimated Auction Value (USD)</h3><button id="estimateBtn" class="secondary" onclick="generateAIListing(true)">Update Estimate Only</button><div id="estimateStatus" class="hint" role="status" style="margin-top:8px"></div><p class="hint">AI fills a suggested resale range for the entire lot, before fees, tax and shipping. Review the estimate and source pages before saving.</p>
     <div class="est">
       <div><label>Low estimate</label><input id="low" type="number" min="0" step=".01" placeholder="$"></div>
       <div><label>High estimate</label><input id="high" type="number" min="0" step=".01" placeholder="$"></div>
@@ -151,10 +151,10 @@ async function prepareAIRequest(lot,sourcePhotos){
   throw new Error('This lot has too many photos for one analysis. Remove some photos and try again.');
 }
 
-async function generateAIListing(){
+async function generateAIListing(estimatesOnly=false){
   if(!photos.length){alert('Add at least one photo before AI analysis.');return}
   const revision=formRevision, originalPhotos=photos.slice(), currentLot=$('lotNo').textContent;
-  const btn=$('generateBtn'); btn.disabled=true; btn.textContent='Analyzing all photos…';
+  const btn=$('generateBtn'); $('estimateBtn').disabled=true; $('estimateStatus').textContent='Researching the lot value…'; btn.disabled=true; btn.textContent='Analyzing all photos…';
   $('aiStatus').textContent=`Reviewing ${photos.length} photo${photos.length===1?'':'s'} together…`;
   try{
     $('aiStatus').textContent='Preparing photos for analysis…';
@@ -164,23 +164,26 @@ async function generateAIListing(){
     const x=await res.json().catch(()=>({}));
     if(!res.ok) throw new Error(x.error || ('AI service returned '+res.status));
     if(revision!==formRevision || currentLot!==$('lotNo').textContent || originalPhotos.length!==photos.length || originalPhotos.some((p,i)=>p!==photos[i])) { $('aiStatus').textContent='The lot changed during analysis. Analyze the current photos again.'; return; }
+    if(!estimatesOnly){
     $('title').value=x.title||'';
     $('description').value=x.description||'';
     $('markings').value=x.maker_markings||x.markings||'';
     $('condition').value=x.condition||'';
     const ws=normalizeWarnings(x.warnings);
     renderWarnings(ws); $('warningNotes').value=ws.join('\n');
+    }
     $('low').value=x.low??''; $('high').value=x.high??'';
     $('valuationNotes').value=x.valuationNotes||'No valuation notes returned.';
     $('comps').innerHTML='';
     if(Array.isArray(x.comps)&&x.comps.length) x.comps.forEach(addComp); else addComp();
     autoSave();
+    $('estimateStatus').textContent=x.low!=null&&x.high!=null?'Estimate updated. Review the range and assumptions below.':'No numerical estimate returned. See valuation notes for the missing information.';
     $('aiStatus').className='aiStatus hint ok';
-    $('aiStatus').textContent=`AI analyzed ${photos.length} photo${photos.length===1?'':'s'}. Listing and value estimate filled. Review every field and comparable source before saving.`;
+    $('aiStatus').textContent=estimatesOnly?'Value estimate and comparable prices updated. Listing text kept.':`AI analyzed ${photos.length} photo${photos.length===1?'':'s'}. Review the listing and valuation notes before saving.`;
   }catch(err){
     $('aiStatus').className='aiStatus hint';
-    $('aiStatus').textContent='AI analysis failed: '+err.message;
-  }finally{btn.disabled=false;btn.textContent='Analyze All Photos & Generate Listing'}
+    $('aiStatus').textContent='AI analysis failed: '+err.message; $('estimateStatus').textContent=$('aiStatus').textContent;
+  }finally{$('estimateBtn').disabled=false;btn.disabled=false;btn.textContent='Analyze All Photos & Generate Listing'}
 }
 function addFiles(files){
   const uploadRevision=formRevision;
@@ -269,7 +272,7 @@ async function saveLot(next){
   try{await persist();if(next){const n=+$('lotNo').textContent+1;await openLot(n)}else{$('status').textContent=`Lot ${$('lotNo').textContent} saved on this device.`}}catch{}
 }
 function resetForm(){
-  formRevision++;photos=[];renderPhotos();renderWarnings([]);
+  formRevision++;$('estimateStatus').textContent='';photos=[];renderPhotos();renderWarnings([]);
   fields.forEach(f=>$(f).value=f==='qty'?'1':'');
   $('shipping').checked=true;$('comps').innerHTML='';addComp();
   $('aiStatus').className='aiStatus hint';$('aiStatus').textContent='Add photos, then analyze the lot to fill the listing and USD value estimate.';
