@@ -1,0 +1,11 @@
+{
+  "name": "cmb-auction-cataloger",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "linkedom": "^0.18.12"
+  }
+}

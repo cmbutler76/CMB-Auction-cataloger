@@ -30,15 +30,24 @@
   </style>
 </head>
 <body>
-<div class="app">
+<p id="storageError" role="alert" hidden></p><div class="app">
   <div class="top">
     <div><h2 style="margin:0">CMB Auction Cataloger</h2><div class="hint">Photo-based auction lot cataloging</div></div>
     <div class="row">
-      <button class="secondary" onclick="exportData()">Export Backup</button>
+      <button class="secondary" onclick="exportData()">Export This Auction</button>
       <label class="btn secondary">Import Backup<input id="importFile" type="file" accept=".json" class="hidden"></label>
     </div>
   </div>
 
+  <div class="card">
+    <h3>Auctions</h3>
+    <label for="auctionSelect">Current auction</label><select id="auctionSelect"></select>
+    <div class="row"><div style="flex:1"><label for="auctionName">Auction name</label><input id="auctionName"></div><button id="renameAuction" class="secondary">Rename</button></div>
+    <label for="newAuctionName">New auction name</label><input id="newAuctionName" placeholder="e.g. November collectibles">
+    <button id="createAuction" class="primary" style="margin-top:10px">＋ Create Auction</button>
+    <p class="hint">Each auction keeps its own lots, photos and numbering. Changes save automatically on this device and browser. Export a backup before changing devices or clearing browser data.</p>
+    <details><summary id="lotCount">Saved lots</summary><div id="savedLots" class="row" style="margin-top:10px"></div></details>
+  </div>
   <div class="card">
     <div class="row" style="justify-content:space-between;align-items:center">
       <div><div class="hint">CURRENT LOT</div><div class="lot">Lot <span id="lotNo">1</span></div></div>
@@ -76,7 +85,7 @@
       <div><label>High estimate</label><input id="high" type="number" min="0" step=".01" placeholder="$"></div>
     </div>
     <label>Confidence / valuation notes</label><textarea id="valuationNotes" placeholder="AI confidence, comparable prices and condition adjustments"></textarea>
-    <h4>Comparable Prices</h4><p class="hint">AI adds sources it found when available. Check each source; asking prices are not completed sales. Missing dates stay blank.</p><div id="comps"></div><button class="secondary" onclick="addComp()">＋ Add Comparable</button>
+    <h4>Comparable Prices</h4><p class="hint">AI adds sources it found when available. Check each source; asking prices are not completed sales. Missing dates stay blank.</p><div id="comps"></div><button class="secondary" onclick="addComp();autoSave()">＋ Add Comparable</button>
   </div>
 
   <div class="card"><h3>Auction Information</h3><label>Quantity</label><input id="qty" type="number" min="1" value="1"><label><input id="shipping" type="checkbox" checked style="width:auto"> Shipping available</label></div>
@@ -88,6 +97,7 @@
   </div>
 </div>
 
+<script src="./storage.js"></script>
 <script>
 let photos=[], lots={}, dragIndex=null, formRevision=0;
 const $=id=>document.getElementById(id);
@@ -165,6 +175,7 @@ async function generateAIListing(){
     $('valuationNotes').value=x.valuationNotes||'No valuation notes returned.';
     $('comps').innerHTML='';
     if(Array.isArray(x.comps)&&x.comps.length) x.comps.forEach(addComp); else addComp();
+    autoSave();
     $('aiStatus').className='aiStatus hint ok';
     $('aiStatus').textContent=`AI analyzed ${photos.length} photo${photos.length===1?'':'s'}. Listing and value estimate filled. Review every field and comparable source before saving.`;
   }catch(err){
@@ -173,10 +184,11 @@ async function generateAIListing(){
   }finally{btn.disabled=false;btn.textContent='Analyze All Photos & Generate Listing'}
 }
 function addFiles(files){
+  const uploadRevision=formRevision;
   [...files].forEach(f=>{
     if(!f.type.startsWith('image/')) return;
     const r=new FileReader();
-    r.onload=()=>{photos.push({data:r.result,main:photos.length===0});renderPhotos()};
+    r.onload=()=>{if(uploadRevision!==formRevision){$('status').textContent='The lot changed before photos finished loading. Add those photos again.';return}photos.push({data:r.result,main:photos.length===0});renderPhotos();autoSave()};
     r.readAsDataURL(f);
   });
 }
@@ -186,57 +198,123 @@ function renderPhotos(){
   let el=$('photos');el.innerHTML='';
   photos.forEach((p,i)=>{
     let d=document.createElement('div');d.className='photo '+(p.main?'main':'');d.draggable=true;
-    d.ondragstart=()=>dragIndex=i;d.ondragover=e=>e.preventDefault();d.ondrop=()=>{if(dragIndex===null)return;let x=photos.splice(dragIndex,1)[0];photos.splice(i,0,x);dragIndex=null;renderPhotos()};
+    d.ondragstart=()=>dragIndex=i;d.ondragover=e=>e.preventDefault();d.ondrop=()=>{if(dragIndex===null)return;let x=photos.splice(dragIndex,1)[0];photos.splice(i,0,x);dragIndex=null;renderPhotos();autoSave()};
     d.innerHTML=`${p.main?'<span class="badge">MAIN</span>':''}<span class="drag">↕</span><img alt="Lot photo" src="${p.data}"><div class="actions"><button onclick="setMain(${i})">★ Set Main</button><button onclick="delPhoto(${i})">Delete</button></div>`;
     el.appendChild(d);
   });
 }
-function setMain(i){photos.forEach((p,j)=>p.main=j===i);renderPhotos()}
-function delPhoto(i){let was=photos[i]?.main;photos.splice(i,1);if(was&&photos[0])photos[0].main=true;renderPhotos()}
+function setMain(i){photos.forEach((p,j)=>p.main=j===i);renderPhotos();autoSave()}
+function delPhoto(i){let was=photos[i]?.main;photos.splice(i,1);if(was&&photos[0])photos[0].main=true;renderPhotos();autoSave()}
 function escAttr(v=''){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function addComp(c={}){
   let d=document.createElement('div');d.className='comp';
-  d.innerHTML=`<label>Comparable item</label><input class="cTitle" placeholder="Comparable item" value="${escAttr(c.title||'')}"><div class="est"><div><label>Price (USD)</label><input class="cPrice" type="number" min="0" step=".01" placeholder="$" value="${escAttr(c.price??'')}"></div><div><label>Price type</label><select class="cStatus"><option value="unknown">Not specified</option><option value="sold">Sold</option><option value="asking">Asking price</option></select></div></div><label>Sale date (if known)</label><input class="cDate" type="date" value="${escAttr(c.date||'')}"><label>Source link</label><input class="cSource" type="url" placeholder="https://…" value="${escAttr(c.source||'')}"><a class="sourceLink" target="_blank" rel="noopener noreferrer" style="display:none;margin:10px 0">Open source to review</a><button class="danger" style="margin-top:7px" onclick="this.parentElement.remove()">Remove</button>`;
+  d.innerHTML=`<label>Comparable item</label><input class="cTitle" placeholder="Comparable item" value="${escAttr(c.title||'')}"><div class="est"><div><label>Price (USD)</label><input class="cPrice" type="number" min="0" step=".01" placeholder="$" value="${escAttr(c.price??'')}"></div><div><label>Price type</label><select class="cStatus"><option value="unknown">Not specified</option><option value="sold">Sold</option><option value="asking">Asking price</option></select></div></div><label>Sale date (if known)</label><input class="cDate" type="date" value="${escAttr(c.date||'')}"><label>Source link</label><input class="cSource" type="url" placeholder="https://…" value="${escAttr(c.source||'')}"><a class="sourceLink" target="_blank" rel="noopener noreferrer" style="display:none;margin:10px 0">Open source to review</a><button class="danger" style="margin-top:7px" onclick="this.parentElement.remove();autoSave()">Remove</button>`;
   d.querySelector('.cStatus').value=['sold','asking'].includes(c.status)?c.status:'unknown';
   const updateLink=()=>{const a=d.querySelector('.sourceLink');try{const u=new URL(d.querySelector('.cSource').value);if(!['https:','http:'].includes(u.protocol))throw Error();a.href=u.href;a.style.display='block'}catch{a.removeAttribute('href');a.style.display='none'}};
   d.querySelector('.cSource').oninput=updateLink;updateLink();
   $('comps').appendChild(d)
 }
 function getComps(){return [...document.querySelectorAll('.comp')].map(d=>({title:d.querySelector('.cTitle').value,price:d.querySelector('.cPrice').value,date:d.querySelector('.cDate').value,source:d.querySelector('.cSource').value,status:d.querySelector('.cStatus').value,currency:'USD'}))}
-function saveLot(next){
-  let n=+$('lotNo').textContent;
-  if(!photos.length&&!confirm('This lot has no photos. Save anyway?'))return;
-  let obj={lot:n,photos,comps:getComps(),shipping:$('shipping').checked};
-  fields.forEach(f=>obj[f]=$(f).value);
-  lots[n]=obj;
-  try{localStorage.setItem('cmbAuctionLots',JSON.stringify(lots));$('status').textContent=`Lot ${n} saved.`}
-  catch(e){$('status').textContent='Could not save all photos locally. Export a backup before leaving this page.'}
-  if(next){$('lotNo').textContent=n+1;$('startLot').value=n+1;resetForm()}
+let auction=null, saveQueue=Promise.resolve(), ready=false;
+function snapshotLot(){
+  const obj={lot:+$('lotNo').textContent,photos:photos.slice(),comps:getComps(),shipping:$('shipping').checked};
+  fields.forEach(f=>obj[f]=$(f).value);return obj;
+}
+function hasContent(lot){return lot.photos.length || ['title','description','markings','condition','warningNotes','low','high','valuationNotes'].some(f=>lot[f]) || lot.comps.some(c=>c.title||c.price||c.source)}
+function persist(){
+  if(!ready||!auction)return Promise.resolve();
+  const draft=snapshotLot();auction.draft=draft;auction.currentLot=draft.lot;
+  if(hasContent(draft)||lots[draft.lot])lots[draft.lot]=draft;
+  auction.lots=lots;auction.updated=new Date().toISOString();
+  const saved=structuredClone(auction);
+  $('status').textContent='Saving on this device…';
+  const task=saveQueue.catch(()=>{}).then(()=>CatalogStorage.save(saved));saveQueue=task;
+  task.then(()=>{if(saveQueue===task)$('status').textContent='Saved on this device.';renderLotList();const option=[...$('auctionSelect').querySelectorAll('option')].find(o=>o.value===auction.id);if(option)option.textContent=`${auction.name} (${Object.keys(lots).length} lots)`},()=>{$('status').textContent='SAVE FAILED — storage may be full or unavailable. Export a backup now. Your work is still on this screen.'});
+  return task;
+}
+function autoSave(){persist().catch(()=>{})}
+function renderLotList(){
+  $('savedLots').innerHTML='';Object.values(lots).sort((a,b)=>a.lot-b.lot).forEach(l=>{
+    const b=document.createElement('button');b.className='secondary';b.textContent=`Lot ${l.lot} · ${l.title||'Untitled'}`;b.onclick=()=>openLot(l.lot);$('savedLots').appendChild(b);
+  });
+  $('lotCount').textContent=`${Object.keys(lots).length} lots in this auction`;
+}
+function fillLot(lot){
+  resetForm();if(!lot)return;
+  photos=Array.isArray(lot.photos)?lot.photos:[];renderPhotos();
+  fields.forEach(f=>$(f).value=lot[f]??(f==='qty'?'1':''));
+  $('shipping').checked=lot.shipping!==false;renderWarnings(normalizeWarnings(lot.warningNotes));
+  $('comps').innerHTML='';if(lot.comps?.length)lot.comps.forEach(addComp);else addComp();
+}
+async function openLot(n){
+  try{await persist();$('lotNo').textContent=n;$('startLot').value=n;fillLot(lots[n]);await persist();renderLotList()}catch{$('startLot').value=$('lotNo').textContent}
+}
+async function refreshAuctions(){
+  const entries=await CatalogStorage.list();$('auctionSelect').innerHTML='';
+  entries.forEach(a=>{const o=document.createElement('option');o.value=a.id;o.textContent=`${a.name} (${a.count} lots)`;$('auctionSelect').appendChild(o)});$('auctionSelect').value=auction.id;
+}
+async function useAuction(a){
+  auction=a;lots=a.lots||{};const n=a.draft?.lot||a.currentLot||1;
+  $('lotNo').textContent=n;$('startLot').value=n;$('auctionName').value=a.name;
+  fillLot(a.draft||lots[n]);renderLotList();await refreshAuctions();
+}
+function newAuctionRecord(name,lots={}){
+  const currentLot=Math.max(1,...Object.keys(lots).map(Number).filter(Number.isFinite));
+  return {id:crypto.randomUUID(),name,lots,currentLot,draft:lots[currentLot]||null,updated:new Date().toISOString()};
+}
+async function createAuction(){
+  const name=$('newAuctionName').value.trim();if(!name){$('newAuctionName').focus();return}
+  try{await persist();const a=newAuctionRecord(name);await CatalogStorage.save(a);await useAuction(a);$('newAuctionName').value='';$('status').textContent='New auction created. Starts at Lot 1.'}catch{$('status').textContent='Could not create auction. Export a backup and check device storage.'}
+}
+async function saveLot(next){
+  try{await persist();if(next){const n=+$('lotNo').textContent+1;await openLot(n)}else{$('status').textContent=`Lot ${$('lotNo').textContent} saved on this device.`}}catch{}
 }
 function resetForm(){
-  formRevision++;
-  photos=[];renderPhotos();renderWarnings([]);
+  formRevision++;photos=[];renderPhotos();renderWarnings([]);
   fields.forEach(f=>$(f).value=f==='qty'?'1':'');
   $('shipping').checked=true;$('comps').innerHTML='';addComp();
-  $('aiStatus').className='aiStatus hint';$('aiStatus').textContent='Add photos, then analyze the lot to fill the listing and USD value estimate.'
+  $('aiStatus').className='aiStatus hint';$('aiStatus').textContent='Add photos, then analyze the lot to fill the listing and USD value estimate.';
 }
-function clearCurrent(){if(confirm('Clear this unsaved lot?'))resetForm()}
-$('startLot').onchange=e=>{
-  const n=Math.max(1,parseInt(e.target.value||'1',10));e.target.value=n;
-  if(confirm(`Start at lot ${n}?`)){$('lotNo').textContent=n;resetForm()} else e.target.value=$('lotNo').textContent;
-}
+function clearCurrent(){if(confirm('Clear the current lot fields? This updates the saved lot too.')){resetForm();autoSave()}}
+$('startLot').onchange=e=>{const n=Math.max(1,parseInt(e.target.value||'1',10));openLot(n)};
+$('auctionSelect').onchange=async e=>{const id=e.target.value;try{await persist();const a=await CatalogStorage.get(id);if(!a)throw Error();await useAuction(a);await persist()}catch{$('auctionSelect').value=auction.id}};
+$('renameAuction').onclick=async()=>{const name=$('auctionName').value.trim();if(!name)return;auction.name=name;try{await persist();await refreshAuctions()}catch{}};
+$('createAuction').onclick=createAuction;
 function exportData(){
-  let blob=new Blob([JSON.stringify({lots,currentLot:+$('lotNo').textContent},null,2)],{type:'application/json'}),a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download='CMB-Auction-Catalog-Backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)
+  const draft=snapshotLot(),backup={version:2,auction:{...auction,lots:{...lots},draft,currentLot:draft.lot}};
+  if(hasContent(draft))backup.auction.lots[draft.lot]=draft;
+  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=`CMB-${(auction?.name||'Auction').replace(/[^a-z0-9-]/gi,'-')}-Backup.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 $('importFile').onchange=e=>{
-  let f=e.target.files[0];if(!f)return;let r=new FileReader();
-  r.onload=()=>{try{let x=JSON.parse(r.result);lots=x.lots||{};let current=Math.max(1,parseInt(x.currentLot||1,10));$('lotNo').textContent=current;$('startLot').value=current;localStorage.setItem('cmbAuctionLots',JSON.stringify(lots));$('status').textContent='Backup imported.'}catch(err){alert('That backup file could not be read.')}};
-  r.readAsText(f);e.target.value=''
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=async()=>{try{
+    const x=JSON.parse(r.result),source=x.auction||x;
+    if(!source.lots||typeof source.lots!=='object'||Array.isArray(source.lots))throw Error();
+    for(const l of Object.values(source.lots))if(!l||!Number.isInteger(l.lot)||!Array.isArray(l.photos))throw Error();
+    await persist();const a=newAuctionRecord((source.name||f.name.replace(/\.json$/i,''))+' (imported)',source.lots);
+    a.currentLot=source.currentLot||a.currentLot;a.draft=source.draft||a.lots[a.currentLot]||null;
+    await CatalogStorage.save(a);await useAuction(a);$('status').textContent='Backup imported as a separate auction. Existing auctions kept.';
+  }catch{$('status').textContent='Backup could not be imported. Check the file and device storage.'}};
+  r.readAsText(f);e.target.value='';
+};
+document.addEventListener('input',e=>{if(!['auctionName','newAuctionName','startLot'].includes(e.target.id))autoSave()});
+document.addEventListener('change',e=>{if(!['auctionSelect','startLot','importFile','picker','camera'].includes(e.target.id))autoSave()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')autoSave()});
+window.addEventListener('pagehide',autoSave);
+async function initialize(){
+  document.querySelector('.app').inert=true;
+  try{
+    await CatalogStorage.open();const entries=await CatalogStorage.list();let a;
+    if(entries.length)a=await CatalogStorage.get(await CatalogStorage.active())||await CatalogStorage.get(entries[0].id);
+    else{a=newAuctionRecord('My First Auction',await CatalogStorage.legacyLots());await CatalogStorage.save(a)}
+    await useAuction(a);ready=true;$('status').textContent='Auction restored. Changes save automatically on this device.';
+    document.querySelector('.app').inert=false;
+    navigator.storage?.persist?.().catch(()=>{});
+  }catch{$('storageError').hidden=false;$('storageError').textContent='Device storage is unavailable. Reopen in your usual browser with private browsing off. Existing stored data has not been cleared.'}
 }
-try{lots=JSON.parse(localStorage.getItem('cmbAuctionLots')||'{}')||{}}catch(e){lots={}}
-addComp();
+initialize();
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}))}
+
 </script>
 </body></html>
-

@@ -31,3 +31,10 @@ AI requires internet access, OPENAI_API_KEY in Netlify, and API credit. It uses 
 Saved lot data uses the existing cmbAuctionLots storage key. Updating the app does not clear saved lots. Export a backup regularly. Reopen or refresh the installed app while online to load this update.
 
 Validation: node --test test/valuation.test.mjs
+
+MULTIPLE AUCTIONS AND AUTOMATIC RESTORE
+Create and name auctions using the Auctions section. Switch with Current auction. Expand the lot count to reopen any lot. Each auction starts at Lot 1 and keeps separate lot numbering, photos and drafts. Text, photos, AI output and comparable changes save automatically to IndexedDB on this device/browser; the active auction and lot restore when reopened. Save & Next advances only after storage succeeds. Old saved localStorage lots and accessible earlier IndexedDB lots migrate into My First Auction without deleting the old data.
+
+Export This Auction creates a backup including the current draft. Importing an old or new backup creates a separate auction instead of overwriting another one. Export each auction regularly. This is device storage, not cloud sync; private browsing, clearing browser data, uninstalling the web app or losing a device can remove it. Use the same app/browser and site address to resume. Photos are stored locally; AI needs internet.
+
+Run npm install and npm test for persistence, migration, auction isolation, save failures and AI valuation checks.
