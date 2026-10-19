@@ -22,7 +22,7 @@
     .photo{position:relative;border:2px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#eee;min-height:130px}.photo.main{border:3px solid #1d4ed8}
     .photo img{width:100%;height:130px;object-fit:cover;display:block}.photo .actions{display:flex;gap:4px;padding:6px;background:white}.photo .actions button{padding:7px;font-size:12px;flex:1}
     .badge{position:absolute;top:7px;left:7px;background:#1d4ed8;color:white;padding:4px 7px;border-radius:8px;font-size:12px}.drag{position:absolute;right:7px;top:7px;background:#fff;padding:3px 7px;border-radius:8px}
-    label{display:block;font-weight:700;margin:10px 0 5px}input,textarea{width:100%;padding:12px;border:1px solid #cfd5df;border-radius:10px;font:inherit}textarea{min-height:100px}
+    label{display:block;font-weight:700;margin:10px 0 5px}input,textarea,select{width:100%;padding:12px;border:1px solid #cfd5df;border-radius:10px;font:inherit}textarea{min-height:100px}
     .est{display:grid;grid-template-columns:1fr 1fr;gap:12px}.footer{position:sticky;bottom:0;background:#f5f6f8ee;backdrop-filter:blur(8px);padding:10px 0}.saveNext{width:100%;font-size:19px;padding:16px}
     .hint{font-size:13px;color:#667085}.comp{border-top:1px solid #eee;padding:10px 0}.warning{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px;margin:7px 0}
     .aiStatus{margin-top:10px;padding:10px;border-radius:10px;background:#f8fafc}.hidden{display:none}.ok{background:#ecfdf3;color:#166534}
@@ -59,7 +59,7 @@
   <div class="card">
     <h3>✨ AI Listing</h3>
     <button id="generateBtn" class="primary" onclick="generateAIListing()">Analyze All Photos & Generate Listing</button>
-    <div id="aiStatus" class="aiStatus hint">Add photos, then analyze the entire lot together.</div>
+    <div id="aiStatus" class="aiStatus hint">Add photos, then analyze the lot to fill the listing and USD value estimate.</div>
     <label>Title</label><input id="title" placeholder="Auction lot title">
     <label>Description</label><textarea id="description" placeholder="Auction description"></textarea>
     <label>Maker / Markings</label><input id="markings" placeholder="e.g. Avon, 925, 1/20 12K GF">
@@ -70,13 +70,13 @@
   </div>
 
   <div class="card">
-    <h3>💰 Estimated Auction Value</h3>
+    <h3>💰 Estimated Auction Value (USD)</h3><p class="hint">AI fills a suggested resale range for the entire lot, before fees, tax and shipping. Review the estimate and source pages before saving.</p>
     <div class="est">
       <div><label>Low estimate</label><input id="low" type="number" min="0" step=".01" placeholder="$"></div>
       <div><label>High estimate</label><input id="high" type="number" min="0" step=".01" placeholder="$"></div>
     </div>
-    <label>Confidence / valuation notes</label><input id="valuationNotes" placeholder="Comparable sales, condition differences, etc.">
-    <h4>Comparable Sales</h4><div id="comps"></div><button class="secondary" onclick="addComp()">＋ Add Comparable</button>
+    <label>Confidence / valuation notes</label><textarea id="valuationNotes" placeholder="AI confidence, comparable prices and condition adjustments"></textarea>
+    <h4>Comparable Prices</h4><p class="hint">AI adds sources it found when available. Check each source; asking prices are not completed sales. Missing dates stay blank.</p><div id="comps"></div><button class="secondary" onclick="addComp()">＋ Add Comparable</button>
   </div>
 
   <div class="card"><h3>Auction Information</h3><label>Quantity</label><input id="qty" type="number" min="1" value="1"><label><input id="shipping" type="checkbox" checked style="width:auto"> Shipping available</label></div>
@@ -89,7 +89,7 @@
 </div>
 
 <script>
-let photos=[], lots={}, dragIndex=null;
+let photos=[], lots={}, dragIndex=null, formRevision=0;
 const $=id=>document.getElementById(id);
 const fields=['title','description','markings','condition','warningNotes','low','high','valuationNotes','qty'];
 const AI_ENDPOINT='/.netlify/functions/analyze';
@@ -136,7 +136,7 @@ async function prepareAIRequest(lot,sourcePhotos){
       const photo=sourcePhotos[i];
       images.push({data:await resizePhotoForAI(photo.data,...settings),main:photo.main,order:i+1});
     }
-    const body=JSON.stringify({lot,images});
+    const body=JSON.stringify({lot,images,qty:+$('qty').value||1});
     if(new Blob([body]).size<=MAX_AI_BODY_BYTES) return body;
   }
   throw new Error('This lot has too many photos for one analysis. Remove some photos and try again.');
@@ -144,6 +144,7 @@ async function prepareAIRequest(lot,sourcePhotos){
 
 async function generateAIListing(){
   if(!photos.length){alert('Add at least one photo before AI analysis.');return}
+  const revision=formRevision, originalPhotos=photos.slice(), currentLot=$('lotNo').textContent;
   const btn=$('generateBtn'); btn.disabled=true; btn.textContent='Analyzing all photos…';
   $('aiStatus').textContent=`Reviewing ${photos.length} photo${photos.length===1?'':'s'} together…`;
   try{
@@ -153,14 +154,19 @@ async function generateAIListing(){
     const res=await fetch(AI_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body});
     const x=await res.json().catch(()=>({}));
     if(!res.ok) throw new Error(x.error || ('AI service returned '+res.status));
+    if(revision!==formRevision || currentLot!==$('lotNo').textContent || originalPhotos.length!==photos.length || originalPhotos.some((p,i)=>p!==photos[i])) { $('aiStatus').textContent='The lot changed during analysis. Analyze the current photos again.'; return; }
     $('title').value=x.title||'';
     $('description').value=x.description||'';
     $('markings').value=x.maker_markings||x.markings||'';
     $('condition').value=x.condition||'';
     const ws=normalizeWarnings(x.warnings);
     renderWarnings(ws); $('warningNotes').value=ws.join('\n');
+    $('low').value=x.low??''; $('high').value=x.high??'';
+    $('valuationNotes').value=x.valuationNotes||'No valuation notes returned.';
+    $('comps').innerHTML='';
+    if(Array.isArray(x.comps)&&x.comps.length) x.comps.forEach(addComp); else addComp();
     $('aiStatus').className='aiStatus hint ok';
-    $('aiStatus').textContent=`AI analyzed ${photos.length} photo${photos.length===1?'':'s'}. Review and edit every field before saving.`;
+    $('aiStatus').textContent=`AI analyzed ${photos.length} photo${photos.length===1?'':'s'}. Listing and value estimate filled. Review every field and comparable source before saving.`;
   }catch(err){
     $('aiStatus').className='aiStatus hint';
     $('aiStatus').textContent='AI analysis failed: '+err.message;
@@ -190,10 +196,13 @@ function delPhoto(i){let was=photos[i]?.main;photos.splice(i,1);if(was&&photos[0
 function escAttr(v=''){return String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function addComp(c={}){
   let d=document.createElement('div');d.className='comp';
-  d.innerHTML=`<div class="row"><input class="cTitle" placeholder="Comparable item" value="${escAttr(c.title||'')}"><input class="cPrice" type="number" placeholder="Sold price" value="${escAttr(c.price||'')}"><input class="cDate" type="date" value="${escAttr(c.date||'')}"></div><input class="cSource" placeholder="Source link" value="${escAttr(c.source||'')}" style="margin-top:7px"><button class="danger" style="margin-top:7px" onclick="this.parentElement.remove()">Remove</button>`;
+  d.innerHTML=`<label>Comparable item</label><input class="cTitle" placeholder="Comparable item" value="${escAttr(c.title||'')}"><div class="est"><div><label>Price (USD)</label><input class="cPrice" type="number" min="0" step=".01" placeholder="$" value="${escAttr(c.price??'')}"></div><div><label>Price type</label><select class="cStatus"><option value="unknown">Not specified</option><option value="sold">Sold</option><option value="asking">Asking price</option></select></div></div><label>Sale date (if known)</label><input class="cDate" type="date" value="${escAttr(c.date||'')}"><label>Source link</label><input class="cSource" type="url" placeholder="https://…" value="${escAttr(c.source||'')}"><a class="sourceLink" target="_blank" rel="noopener noreferrer" style="display:none;margin:10px 0">Open source to review</a><button class="danger" style="margin-top:7px" onclick="this.parentElement.remove()">Remove</button>`;
+  d.querySelector('.cStatus').value=['sold','asking'].includes(c.status)?c.status:'unknown';
+  const updateLink=()=>{const a=d.querySelector('.sourceLink');try{const u=new URL(d.querySelector('.cSource').value);if(!['https:','http:'].includes(u.protocol))throw Error();a.href=u.href;a.style.display='block'}catch{a.removeAttribute('href');a.style.display='none'}};
+  d.querySelector('.cSource').oninput=updateLink;updateLink();
   $('comps').appendChild(d)
 }
-function getComps(){return [...document.querySelectorAll('.comp')].map(d=>({title:d.querySelector('.cTitle').value,price:d.querySelector('.cPrice').value,date:d.querySelector('.cDate').value,source:d.querySelector('.cSource').value}))}
+function getComps(){return [...document.querySelectorAll('.comp')].map(d=>({title:d.querySelector('.cTitle').value,price:d.querySelector('.cPrice').value,date:d.querySelector('.cDate').value,source:d.querySelector('.cSource').value,status:d.querySelector('.cStatus').value,currency:'USD'}))}
 function saveLot(next){
   let n=+$('lotNo').textContent;
   if(!photos.length&&!confirm('This lot has no photos. Save anyway?'))return;
@@ -205,10 +214,11 @@ function saveLot(next){
   if(next){$('lotNo').textContent=n+1;$('startLot').value=n+1;resetForm()}
 }
 function resetForm(){
+  formRevision++;
   photos=[];renderPhotos();renderWarnings([]);
   fields.forEach(f=>$(f).value=f==='qty'?'1':'');
   $('shipping').checked=true;$('comps').innerHTML='';addComp();
-  $('aiStatus').className='aiStatus hint';$('aiStatus').textContent='Add photos, then analyze the entire lot together.'
+  $('aiStatus').className='aiStatus hint';$('aiStatus').textContent='Add photos, then analyze the lot to fill the listing and USD value estimate.'
 }
 function clearCurrent(){if(confirm('Clear this unsaved lot?'))resetForm()}
 $('startLot').onchange=e=>{
