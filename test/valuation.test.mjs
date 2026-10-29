@@ -33,3 +33,12 @@ test('rejects sealed or complete-set comparables for an incomplete parts lot',()
  const c=listing.comps[0];const x=normalizeListing({...listing,comps:[{...c,title:'New sealed LEGO set',condition_match:false}]},data);
  assert.equal(x.comps.length,0);assert.match(x.valuationNotes,/No source-backed comparable/);
 });
+
+test('quick descriptions skip web research but keep preliminary price fields',async()=>{
+ const oldFetch=global.fetch,oldKey=process.env.OPENAI_API_KEY;process.env.OPENAI_API_KEY='test';
+ try{
+  global.fetch=async(url,opts)=>{const b=JSON.parse(opts.body);assert.equal(b.tools,undefined);assert.equal(b.tool_choice,undefined);assert.match(b.input[0].content[0].text,/preliminary/);return Response.json({output_text:JSON.stringify({...listing,comps:[]})});};
+  const r=await analyze(new Request('http://localhost',{method:'POST',body:JSON.stringify({mode:'quick',images:['data:image/jpeg;base64,AA==']})}));
+  assert.equal(r.status,200);const x=await r.json();assert.equal(x.low,10);assert.equal(x.comps.length,0);
+ }finally{global.fetch=oldFetch;if(oldKey===undefined)delete process.env.OPENAI_API_KEY;else process.env.OPENAI_API_KEY=oldKey;}
+});

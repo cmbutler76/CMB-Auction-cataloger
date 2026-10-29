@@ -1,4 +1,4 @@
-const CACHE='cmb-auction-cataloger-v5-bulk-estimates';
+const CACHE='cmb-auction-cataloger-v6-continuous-camera-quick-ai';
 const ASSETS=['./','./index.html','./storage.js','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS))));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('cmb-auction-cataloger-')&&k!==CACHE).map(k=>caches.delete(k))))));
