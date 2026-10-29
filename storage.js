@@ -10,8 +10,8 @@ window.CatalogStorage = (() => {
   }
   async function read(store,key){const db=await open();return request(db.transaction(store).objectStore(store).get(key))}
   async function list(){const db=await open();return (await request(db.transaction('auctions').objectStore('auctions').getAll())).map(({id,name,updated,lots})=>({id,name,updated,count:Object.keys(lots||{}).length}))}
-  async function save(auction){
-    const db=await open();return new Promise((resolve,reject)=>{const t=db.transaction(['auctions','settings'],'readwrite');t.objectStore('auctions').put(auction);t.objectStore('settings').put(auction.id,'active');t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||new Error('Save cancelled'))})
+  async function save(auction,activate=true){
+    const db=await open();return new Promise((resolve,reject)=>{const t=db.transaction(['auctions','settings'],'readwrite');t.objectStore('auctions').put(auction);if(activate)t.objectStore('settings').put(auction.id,'active');t.oncomplete=resolve;t.onerror=()=>reject(t.error);t.onabort=()=>reject(t.error||new Error('Save cancelled'))})
   }
   async function legacyLots(){
     let lots={};try{lots=JSON.parse(localStorage.getItem('cmbAuctionLots')||'{}')||{}}catch{}
