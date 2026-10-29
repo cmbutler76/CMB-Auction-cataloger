@@ -26,6 +26,7 @@
     .est{display:grid;grid-template-columns:1fr 1fr;gap:12px}.footer{position:sticky;bottom:0;background:#f5f6f8ee;backdrop-filter:blur(8px);padding:10px 0}.saveNext{width:100%;font-size:19px;padding:16px}
     .hint{font-size:13px;color:#667085}.comp{border-top:1px solid #eee;padding:10px 0}.warning{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px;margin:7px 0}
     .aiStatus{margin-top:10px;padding:10px;border-radius:10px;background:#f8fafc}.hidden{display:none}.ok{background:#ecfdf3;color:#166534}
+    .cameraDialog{width:min(96vw,760px);max-height:95dvh;border:0;border-radius:16px;padding:16px}.cameraDialog::backdrop{background:#000b}.cameraDialog video{display:block;width:100%;max-height:62dvh;background:#111;border-radius:12px;object-fit:contain}.cameraDialog .row{margin-top:12px}.cameraDialog .hint{min-height:2em}
     @media(max-width:600px){.lot{font-size:27px}.app{padding:12px}.top{align-items:flex-start;flex-direction:column}.est{grid-template-columns:1fr}}
   </style>
 </head>
@@ -46,6 +47,7 @@
     <label for="newAuctionName">New auction name</label><input id="newAuctionName" placeholder="e.g. November collectibles">
     <button id="createAuction" class="primary" style="margin-top:10px">＋ Create Auction</button>
     <p class="hint">Each auction keeps its own lots, photos and numbering. Changes save automatically on this device and browser. Export a backup before changing devices or clearing browser data.</p>
+    <div class="aiStatus"><strong>Photos now, descriptions later</strong><p class="hint">Photos save on this device, organized by auction and lot. New photos join the AI queue. Keep the cataloger open when internet returns; queued descriptions will run automatically. You can also start them below. Existing descriptions are kept.</p><label><input id="autoQueuedAI" type="checkbox" style="display:inline;width:auto" checked> Run queued AI when internet returns</label><button id="runQueue" class="secondary" onclick="processAIQueue()">Describe Saved Lots</button><p id="queueStatus" role="status" aria-live="polite" class="hint">Checking saved lots…</p></div>
     <details><summary id="lotCount">Saved lots</summary><div id="savedLots" class="row" style="margin-top:10px"></div></details>
   </div>
   <div class="card">
@@ -58,17 +60,17 @@
   <div class="card">
     <h3>📷 Photos</h3>
     <div class="row">
-      <label class="btn primary">📷 Take Photo<input id="camera" type="file" accept="image/*" capture="environment" class="hidden"></label>
+      <button id="openCamera" class="primary" onclick="openCamera()">📷 Take Photos</button><input id="camera" type="file" accept="image/*" capture="environment" class="hidden">
       <label class="btn secondary">＋ Add Photos<input id="picker" type="file" accept="image/*" multiple class="hidden"></label>
     </div>
-    <div class="hint" style="margin-top:8px">Add several views of the same lot. Drag to reorder. Tap “Set Main” for the primary image.</div>
+    <div class="hint" style="margin-top:8px">The camera stays open after each shot. Photos save automatically to this lot. Tap Done when finished. Drag photos to reorder; tap “Set Main” for the primary image.</div>
     <div id="photos" class="photos"></div>
   </div>
 
   <div class="card">
     <h3>✨ AI Listing</h3>
-    <button id="generateBtn" class="primary" onclick="generateAIListing()">Analyze All Photos & Generate Listing</button>
-    <div id="aiStatus" class="aiStatus hint">Add photos, then analyze the lot to fill the listing and USD value estimate.</div>
+    <button id="generateBtn" class="primary" onclick="generateAIListing()">Generate Description & Quick Estimate</button>
+    <div id="aiStatus" class="aiStatus hint">Add photos, then generate a quick description and preliminary estimate. Research prices separately when needed.</div>
     <label>Title</label><input id="title" placeholder="Auction lot title">
     <label>Description</label><textarea id="description" placeholder="Auction description"></textarea>
     <label>Maker / Markings</label><input id="markings" placeholder="e.g. Avon, 925, 1/20 12K GF">
@@ -78,7 +80,7 @@
   </div>
 
   <div class="card">
-    <h3>💰 Estimated Auction Value (USD)</h3><button id="estimateBtn" class="secondary" onclick="generateAIListing(true)">Update Estimate Only</button><div id="estimateStatus" class="hint" role="status" style="margin-top:8px"></div><p class="hint">AI fills a suggested resale range for the entire lot, before fees, tax and shipping. Review the estimate and source pages before saving.</p>
+    <h3>💰 Estimated Auction Value (USD)</h3><button id="estimateBtn" class="secondary" onclick="generateAIListing(true)">Research Prices & Update Estimate</button><div id="estimateStatus" class="hint" role="status" style="margin-top:8px"></div><p class="hint">AI fills a suggested resale range for the entire lot, before fees, tax and shipping. Review the estimate and source pages before saving.</p>
     <div class="est">
       <div><label>Low estimate</label><input id="low" type="number" min="0" step=".01" placeholder="$"></div>
       <div><label>High estimate</label><input id="high" type="number" min="0" step=".01" placeholder="$"></div>
@@ -96,6 +98,7 @@
   </div>
 </div>
 
+<dialog id="cameraDialog" class="cameraDialog" aria-labelledby="cameraHeading"><h3 id="cameraHeading">Photos for this lot</h3><video id="cameraPreview" autoplay muted playsinline aria-label="Live camera preview"></video><p id="cameraStatus" class="hint" role="status" aria-live="polite"></p><div class="row"><button id="capturePhoto" class="primary" onclick="capturePhoto()" disabled>Take &amp; Save Photo</button><button class="secondary" onclick="closeCamera()">Done</button><button class="secondary" onclick="closeCamera();$('camera').click()">Use device camera instead</button></div></dialog>
 <script src="./storage.js"></script>
 <script>
 let photos=[], lots={}, dragIndex=null, formRevision=0;
@@ -137,7 +140,7 @@ async function resizePhotoForAI(data,maxEdge=1600,quality=.82){
   canvas.width=canvas.height=1;
   return resized;
 }
-async function prepareAIRequest(lot,sourcePhotos){
+async function prepareAIRequest(lot,sourcePhotos,mode='quick',qty=+$('qty').value||1){
   // Keep original photos for display, backup and export.
   for(const settings of [[1600,.82],[1280,.72],[1024,.62],[800,.55]]){
     const images=[];
@@ -145,21 +148,23 @@ async function prepareAIRequest(lot,sourcePhotos){
       const photo=sourcePhotos[i];
       images.push({data:await resizePhotoForAI(photo.data,...settings),main:photo.main,order:i+1});
     }
-    const body=JSON.stringify({lot,images,qty:+$('qty').value||1});
+    const body=JSON.stringify({lot,images,mode,qty});
     if(new Blob([body]).size<=MAX_AI_BODY_BYTES) return body;
   }
   throw new Error('This lot has too many photos for one analysis. Remove some photos and try again.');
 }
 
+let aiQueueRunning=false;
 async function generateAIListing(estimatesOnly=false){
+  if(aiQueueRunning){$('aiStatus').textContent='Saved lots are being described. Please wait for the queue to finish.';return}
   if(!photos.length){alert('Add at least one photo before AI analysis.');return}
   const revision=formRevision, originalPhotos=photos.slice(), currentLot=$('lotNo').textContent;
-  const btn=$('generateBtn'); $('estimateBtn').disabled=true; $('estimateStatus').textContent='Researching the lot value…'; btn.disabled=true; btn.textContent='Analyzing all photos…';
+  const btn=$('generateBtn'); $('estimateBtn').disabled=true; $('estimateStatus').textContent=estimatesOnly?'Researching the lot value…':'Preparing a quick preliminary estimate…'; btn.disabled=true; btn.textContent='Analyzing all photos…';
   $('aiStatus').textContent=`Reviewing ${photos.length} photo${photos.length===1?'':'s'} together…`;
   try{
     $('aiStatus').textContent='Preparing photos for analysis…';
-    const body=await prepareAIRequest(+$('lotNo').textContent,photos.slice());
-    $('aiStatus').textContent='Analyzing all photos…';
+    const body=await prepareAIRequest(+$('lotNo').textContent,photos.slice(),estimatesOnly?'research':'quick');
+    $('aiStatus').textContent=estimatesOnly?'Researching comparable prices…':'Writing the description from your photos…';
     const res=await fetch(AI_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body});
     const x=await res.json().catch(()=>({}));
     if(!res.ok) throw new Error(x.error || ('AI service returned '+res.status));
@@ -176,21 +181,67 @@ async function generateAIListing(estimatesOnly=false){
     $('valuationNotes').value=x.valuationNotes||'No valuation notes returned.';
     $('comps').innerHTML='';
     if(Array.isArray(x.comps)&&x.comps.length) x.comps.forEach(addComp); else addComp();
+    if(!estimatesOnly&&lots[currentLot])lots[currentLot].aiPending=false;
     autoSave();
     $('estimateStatus').textContent=x.low!=null&&x.high!=null?'Estimate updated. Review the range and assumptions below.':'No numerical estimate returned. See valuation notes for the missing information.';
     $('aiStatus').className='aiStatus hint ok';
-    $('aiStatus').textContent=estimatesOnly?'Value estimate and comparable prices updated. Listing text kept.':`AI analyzed ${photos.length} photo${photos.length===1?'':'s'}. Review the listing and valuation notes before saving.`;
+    $('aiStatus').textContent=estimatesOnly?'Value estimate and comparable prices updated. Listing text kept.':`Description and quick estimate ready from ${photos.length} photo${photos.length===1?'':'s'}. No web search was used. Use Research Prices for comparable sources.`;
   }catch(err){
     $('aiStatus').className='aiStatus hint';
     $('aiStatus').textContent='AI analysis failed: '+err.message; $('estimateStatus').textContent=$('aiStatus').textContent;
-  }finally{$('estimateBtn').disabled=false;btn.disabled=false;btn.textContent='Analyze All Photos & Generate Listing'}
+  }finally{$('estimateBtn').disabled=false;btn.disabled=false;btn.textContent='Generate Description & Quick Estimate'}
 }
+let cameraStream=null, cameraOpening=false, cameraSession=0;
+function closeCamera(){
+  cameraSession++;
+  cameraStream?.getTracks().forEach(track=>track.stop());cameraStream=null;
+  $('cameraPreview').srcObject=null;$('capturePhoto').disabled=true;
+  if($('cameraDialog').open)$('cameraDialog').close();
+  $('openCamera').focus();
+}
+async function openCamera(){
+  if(cameraOpening)return;
+  if(!navigator.mediaDevices?.getUserMedia||!$('cameraDialog').showModal){$('camera').click();return}
+  cameraOpening=true;const session=++cameraSession;
+  $('cameraHeading').textContent=`Photos for Lot ${$('lotNo').textContent}`;
+  $('cameraStatus').textContent='Opening camera…';$('capturePhoto').disabled=true;
+  $('cameraDialog').showModal();
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:2560},height:{ideal:1920}}});
+    if(session!==cameraSession){stream.getTracks().forEach(track=>track.stop());return}
+    cameraStream=stream;const video=$('cameraPreview');video.srcObject=stream;await video.play();
+    if(session!==cameraSession)return;
+    $('capturePhoto').disabled=false;$('cameraStatus').textContent='Ready. Each shot saves automatically and the camera stays open.';
+  }catch{
+    if(session!==cameraSession)return;
+    cameraStream?.getTracks().forEach(track=>track.stop());cameraStream=null;
+    $('cameraPreview').srcObject=null;
+    $('cameraStatus').textContent='Camera unavailable or permission was denied. Allow camera access, or tap Use device camera instead.';
+  }finally{cameraOpening=false}
+}
+async function capturePhoto(){
+  const video=$('cameraPreview'),button=$('capturePhoto');
+  if(button.disabled||!cameraStream)return;
+  if(!video.videoWidth||!video.videoHeight){$('cameraStatus').textContent='Camera is getting ready. Try again in a moment.';return}
+  button.disabled=true;let saved=false;const revision=formRevision,session=cameraSession;
+  try{
+    const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+    const context=canvas.getContext('2d');if(!context)throw Error('Camera image is unavailable.');
+    context.drawImage(video,0,0);const data=canvas.toDataURL('image/jpeg',.9);canvas.width=canvas.height=1;
+    if(revision!==formRevision)return;
+    photos.push({data,main:photos.length===0});queueCurrentAI();renderPhotos();
+    $('cameraStatus').textContent='Saving photo…';await persist();saved=true;
+    if(session===cameraSession)$('cameraStatus').textContent=`Photo saved · ${photos.length} in this lot. Ready for the next photo.`;
+  }catch{if(session===cameraSession)$('cameraStatus').textContent='Photo is still on this screen but could not be saved. Tap Done and export a backup before continuing.';return}
+  finally{if(session===cameraSession)button.disabled=!saved}
+}
+$('cameraDialog').addEventListener('cancel',e=>{e.preventDefault();closeCamera()});
 function addFiles(files){
   const uploadRevision=formRevision;
   [...files].forEach(f=>{
     if(!f.type.startsWith('image/')) return;
     const r=new FileReader();
-    r.onload=()=>{if(uploadRevision!==formRevision){$('status').textContent='The lot changed before photos finished loading. Add those photos again.';return}photos.push({data:r.result,main:photos.length===0});renderPhotos();autoSave()};
+    r.onload=()=>{if(uploadRevision!==formRevision){$('status').textContent='The lot changed before photos finished loading. Add those photos again.';return}photos.push({data:r.result,main:photos.length===0});queueCurrentAI();renderPhotos();autoSave()};
     r.readAsDataURL(f);
   });
 }
@@ -218,8 +269,9 @@ function addComp(c={}){
 }
 function getComps(){return [...document.querySelectorAll('.comp')].map(d=>({title:d.querySelector('.cTitle').value,price:d.querySelector('.cPrice').value,date:d.querySelector('.cDate').value,source:d.querySelector('.cSource').value,status:d.querySelector('.cStatus').value,currency:'USD'}))}
 let auction=null, saveQueue=Promise.resolve(), ready=false;
+function queueCurrentAI(){const n=+$('lotNo').textContent;lots[n]={...lots[n],aiPending:true};}
 function snapshotLot(){
-  const obj={lot:+$('lotNo').textContent,photos:photos.slice(),comps:getComps(),shipping:$('shipping').checked};
+  const obj={aiPending:!!lots[+$('lotNo').textContent]?.aiPending,lot:+$('lotNo').textContent,photos:photos.slice(),comps:getComps(),shipping:$('shipping').checked};
   fields.forEach(f=>obj[f]=$(f).value);return obj;
 }
 function hasContent(lot){return lot.photos.length || ['title','description','markings','condition','warningNotes','low','high','valuationNotes'].some(f=>lot[f]) || lot.comps.some(c=>c.title||c.price||c.source)}
@@ -231,7 +283,7 @@ function persist(){
   const saved=structuredClone(auction);
   $('status').textContent='Saving on this device…';
   const task=saveQueue.catch(()=>{}).then(()=>CatalogStorage.save(saved));saveQueue=task;
-  task.then(()=>{if(saveQueue===task)$('status').textContent='Saved on this device.';renderLotList();const option=[...$('auctionSelect').querySelectorAll('option')].find(o=>o.value===auction.id);if(option)option.textContent=`${auction.name} (${Object.keys(lots).length} lots)`},()=>{$('status').textContent='SAVE FAILED — storage may be full or unavailable. Export a backup now. Your work is still on this screen.'});
+  task.then(()=>{if(saveQueue===task)$('status').textContent='Saved on this device.';renderLotList();updateQueueStatus();const option=[...$('auctionSelect').querySelectorAll('option')].find(o=>o.value===auction.id);if(option)option.textContent=`${auction.name} (${Object.keys(lots).length} lots)`},()=>{$('status').textContent='SAVE FAILED — storage may be full or unavailable. Export a backup now. Your work is still on this screen.'});
   return task;
 }
 function autoSave(){persist().catch(()=>{})}
@@ -272,10 +324,10 @@ async function saveLot(next){
   try{await persist();if(next){const n=+$('lotNo').textContent+1;await openLot(n)}else{$('status').textContent=`Lot ${$('lotNo').textContent} saved on this device.`}}catch{}
 }
 function resetForm(){
-  formRevision++;$('estimateStatus').textContent='';photos=[];renderPhotos();renderWarnings([]);
+  if(cameraStream||cameraOpening)closeCamera();formRevision++;$('estimateStatus').textContent='';photos=[];renderPhotos();renderWarnings([]);
   fields.forEach(f=>$(f).value=f==='qty'?'1':'');
   $('shipping').checked=true;$('comps').innerHTML='';addComp();
-  $('aiStatus').className='aiStatus hint';$('aiStatus').textContent='Add photos, then analyze the lot to fill the listing and USD value estimate.';
+  $('aiStatus').className='aiStatus hint';$('aiStatus').textContent='Add photos, then generate a quick description and preliminary estimate. Research prices separately when needed.';
 }
 function clearCurrent(){if(confirm('Clear the current lot fields? This updates the saved lot too.')){resetForm();autoSave()}}
 $('startLot').onchange=e=>{const n=Math.max(1,parseInt(e.target.value||'1',10));openLot(n)};
@@ -300,19 +352,70 @@ $('importFile').onchange=e=>{
   }catch{$('status').textContent='Backup could not be imported. Check the file and device storage.'}};
   r.readAsText(f);e.target.value='';
 };
-document.addEventListener('input',e=>{if(!['auctionName','newAuctionName','startLot'].includes(e.target.id))autoSave()});
-document.addEventListener('change',e=>{if(!['auctionSelect','startLot','importFile','picker','camera'].includes(e.target.id))autoSave()});
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')autoSave()});
-window.addEventListener('pagehide',autoSave);
+document.addEventListener('input',e=>{if(!['auctionName','newAuctionName','startLot','autoQueuedAI'].includes(e.target.id))autoSave()});
+document.addEventListener('change',e=>{if(!['auctionSelect','startLot','importFile','picker','camera','autoQueuedAI'].includes(e.target.id))autoSave()});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'){if(cameraStream||cameraOpening)closeCamera();autoSave()}});
+window.addEventListener('pagehide',()=>{closeCamera();autoSave()});
+
+function updateQueueStatus(){
+  if(aiQueueRunning)return;
+  const count=Object.values(lots).filter(l=>l.aiPending&&l.photos?.length).length;
+  $('queueStatus').textContent=`${navigator.onLine===false?'Offline · ':''}${count} lot${count===1?'':'s'} waiting for AI in this auction. Photos are saved on this device.`;
+}
+function listingFingerprint(l){return JSON.stringify([l.photos,l.title||'',l.description||'',l.markings||'',l.condition||'',l.qty||'1']);}
+async function processAIQueue(){
+  if(aiQueueRunning||!ready)return;
+  if(navigator.onLine===false){updateQueueStatus();return}
+  if($('generateBtn').disabled){$('queueStatus').textContent='Wait for the current description to finish, then start the queue.';return}
+  aiQueueRunning=true;$('runQueue').disabled=true;$('generateBtn').disabled=true;$('estimateBtn').disabled=true;
+  let completed=0,skipped=0,failed=false;
+  try{
+    await persist();
+    const entries=await CatalogStorage.list();
+    for(const entry of entries){
+      const savedAuction=await CatalogStorage.get(entry.id);
+      for(const source of Object.values(savedAuction.lots||{})){
+        if(!source.aiPending||!source.photos?.length)continue;
+        if(source.description?.trim()){skipped++;continue}
+        if(navigator.onLine===false)throw Error('Connection lost. Remaining lots stay queued.');
+        if(entry.id===auction.id&&source.lot===+$('lotNo').textContent&&(cameraStream||cameraOpening)){skipped++;continue}
+        $('queueStatus').textContent=`Describing ${savedAuction.name} · Lot ${source.lot}… ${completed} completed. You can keep cataloging.`;
+        const fingerprint=listingFingerprint(source);
+        const body=await prepareAIRequest(source.lot,source.photos,'quick',+source.qty||1);
+        const res=await fetch(AI_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body});
+        const x=await res.json().catch(()=>({}));if(!res.ok)throw Error(x.error||'AI is unavailable. Remaining lots stay queued.');
+        // Flush current edits before comparing; never overwrite a changed lot.
+        await persist();const latest=await CatalogStorage.get(entry.id),target=latest?.lots?.[source.lot];
+        if(!target||!target.aiPending||listingFingerprint(target)!==fingerprint){skipped++;continue}
+        const updated={...target,title:x.title||'',description:x.description||'',markings:x.maker_markings||'',condition:x.condition||'',warningNotes:normalizeWarnings(x.warnings).join('\n'),low:x.low??'',high:x.high??'',valuationNotes:x.valuationNotes||'',comps:x.comps||[],aiPending:false};
+        latest.lots[source.lot]=updated;
+        if(latest.draft?.lot===source.lot)latest.draft=updated;
+        // Background saves must not switch the active auction on the next launch.
+        await CatalogStorage.save(latest,false);completed++;
+        if(entry.id===auction.id){
+          lots[source.lot]=updated;auction.lots=lots;
+          if(+$('lotNo').textContent===source.lot){auction.draft=updated;fillLot(updated)}
+          renderLotList();
+        }
+      }
+    }
+    $('queueStatus').textContent=`${completed} lot${completed===1?'':'s'} described.${skipped?' Existing descriptions, open camera lots, or edited lots were kept; review remaining queued lots.':''}`;
+  }catch(error){failed=true;$('queueStatus').textContent=`${completed} described. ${error.message} Open the cataloger with internet and tap Describe Saved Lots to retry.`}
+  finally{aiQueueRunning=false;$('runQueue').disabled=false;$('generateBtn').disabled=false;$('estimateBtn').disabled=false;if(!completed&&!skipped&&!failed)updateQueueStatus()}
+}
+window.addEventListener('online',()=>{updateQueueStatus();if($('autoQueuedAI').checked)processAIQueue()});
+window.addEventListener('offline',updateQueueStatus);
+
 async function initialize(){
   document.querySelector('.app').inert=true;
   try{
     await CatalogStorage.open();const entries=await CatalogStorage.list();let a;
     if(entries.length)a=await CatalogStorage.get(await CatalogStorage.active())||await CatalogStorage.get(entries[0].id);
     else{a=newAuctionRecord('My First Auction',await CatalogStorage.legacyLots());await CatalogStorage.save(a)}
-    await useAuction(a);ready=true;$('status').textContent='Auction restored. Changes save automatically on this device.';
+    await useAuction(a);ready=true;updateQueueStatus();$('status').textContent='Auction restored. Changes save automatically on this device.';
     document.querySelector('.app').inert=false;
     navigator.storage?.persist?.().catch(()=>{});
+    if(navigator.onLine===true&&$('autoQueuedAI').checked)processAIQueue();
   }catch{$('storageError').hidden=false;$('storageError').textContent='Device storage is unavailable. Reopen in your usual browser with private browsing off. Existing stored data has not been cleared.'}
 }
 initialize();
