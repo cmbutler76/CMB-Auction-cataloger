@@ -18,9 +18,9 @@
     .lot{font-size:32px;font-weight:800}
     button,.btn{border:0;border-radius:12px;padding:13px 16px;font-weight:700;font-size:16px;cursor:pointer}
     button:disabled{opacity:.6;cursor:wait}.primary{background:#1d4ed8;color:white}.secondary{background:#e8edf5;color:#17202a}.danger{background:#fee2e2;color:#7f1d1d}
-    .row{display:flex;gap:10px;flex-wrap:wrap}.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:12px}
-    .photo{position:relative;border:2px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#eee;min-height:130px}.photo.main{border:3px solid #1d4ed8}
-    .photo img{width:100%;height:130px;object-fit:contain;display:block;background:#111}.photo .actions{display:flex;gap:4px;padding:6px;background:white}.photo .actions button{padding:7px;font-size:12px;flex:1}
+    .row{display:flex;gap:10px;flex-wrap:wrap}.photos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:12px;align-items:stretch}@media(min-width:700px){.photos{grid-template-columns:repeat(3,minmax(0,1fr))}}
+    .photo{position:relative;border:2px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#f3f4f6;min-width:0;display:flex;flex-direction:column}.photo.main{border:3px solid #1d4ed8}
+    .photo img{width:100%;height:180px;object-fit:contain;display:block;background:#f3f4f6}.photo .actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px;padding:6px;background:white;margin-top:auto}.photo .actions button{padding:8px 4px;font-size:12px;min-width:0;white-space:normal}
     .badge{position:absolute;top:7px;left:7px;background:#1d4ed8;color:white;padding:4px 7px;border-radius:8px;font-size:12px}.drag{position:absolute;right:7px;top:7px;background:#fff;padding:3px 7px;border-radius:8px}
     label{display:block;font-weight:700;margin:10px 0 5px}input,textarea,select{width:100%;padding:12px;border:1px solid #cfd5df;border-radius:10px;font:inherit}textarea{min-height:100px}
     .est{display:grid;grid-template-columns:1fr 1fr;gap:12px}.footer{position:sticky;bottom:0;background:#f5f6f8ee;backdrop-filter:blur(8px);padding:10px 0}.saveNext{width:100%;font-size:19px;padding:16px}
@@ -63,7 +63,8 @@
     <h3>📷 Photos</h3>
     <div class="row">
       <button id="openCamera" class="primary" onclick="openCamera()">📷 Take Photos</button><input id="camera" type="file" accept="image/*" capture="environment" class="hidden">
-      <button type="button" class="secondary" onclick="inspectPhoto(0)">🔍 View & Inspect Photos</button>\n      <label class="btn secondary">＋ Add Photos<input id="picker" type="file" accept="image/*" multiple class="hidden"></label>
+      <button type="button" class="secondary" onclick="inspectPhoto(0)">🔍 View & Inspect Photos</button>
+      <label class="btn secondary">＋ Add Photos<input id="picker" type="file" accept="image/*" multiple class="hidden"></label>
     </div>
     <div class="hint" style="margin-top:8px">The camera stays open after each shot. Photos save automatically to this lot. Tap Done when finished. Drag photos to reorder; tap “Set Main” for the primary image.</div>
     <div id="photos" class="photos"></div>
@@ -286,7 +287,7 @@ function renderPhotos(){
   photos.forEach((p,i)=>{
     let d=document.createElement('div');d.className='photo '+(p.main?'main':'');d.draggable=true;
     d.ondragstart=()=>dragIndex=i;d.ondragover=e=>e.preventDefault();d.ondrop=()=>{if(dragIndex===null)return;let x=photos.splice(dragIndex,1)[0];photos.splice(i,0,x);dragIndex=null;renderPhotos();autoSave()};
-    d.innerHTML=`${p.main?'<span class="badge">MAIN</span>':''}<span class="drag">↕</span><img alt="Lot photo" src="${p.data}" onclick="inspectPhoto(${i})" style="cursor:zoom-in"><div class="actions"><button onclick="inspectPhoto(${i})">🔍 Inspect</button><button onclick="setMain(${i})">★ Set Main</button><button onclick="delPhoto(${i})">Delete</button></div>`;
+    d.innerHTML=`${p.main?'<span class="badge">MAIN</span>':''}<span class="drag">↕</span><img alt="Lot photo" src="${p.data}" onclick="inspectPhoto(${i})" style="cursor:zoom-in"><div class="actions"><button onclick="inspectPhoto(${i})">🔍 Inspect</button><button onclick="setMain(${i})">★ Set Main</button><button onclick="replacePhoto(${i})">Retake</button><button onclick="delPhoto(${i})">Delete</button></div>`;
     el.appendChild(d);
   });
 }
