@@ -27,6 +27,7 @@
     .hint{font-size:13px;color:#667085}.comp{border-top:1px solid #eee;padding:10px 0}.warning{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px;margin:7px 0}
     .aiStatus{margin-top:10px;padding:10px;border-radius:10px;background:#f8fafc}.hidden{display:none}.ok{background:#ecfdf3;color:#166534}
     .cameraDialog{width:min(96vw,760px);max-height:95dvh;border:0;border-radius:16px;padding:16px}.cameraDialog::backdrop{background:#000b}.cameraDialog video{display:block;width:100%;max-height:62dvh;background:#111;border-radius:12px;object-fit:contain}.cameraDialog .row{margin-top:12px}.cameraDialog .hint{min-height:2em}
+    .inspectDialog{width:min(96vw,850px);max-height:96dvh;border:0;border-radius:16px;padding:14px}.inspectDialog::backdrop{background:#000d}.inspectDialog img{display:block;width:100%;max-height:70dvh;object-fit:contain;background:#111;border-radius:10px;touch-action:pinch-zoom}.inspectDialog .row{margin-top:10px}
     @media(max-width:600px){.lot{font-size:27px}.app{padding:12px}.top{align-items:flex-start;flex-direction:column}.est{grid-template-columns:1fr}}
   </style>
 </head>
@@ -62,7 +63,7 @@
     <h3>📷 Photos</h3>
     <div class="row">
       <button id="openCamera" class="primary" onclick="openCamera()">📷 Take Photos</button><input id="camera" type="file" accept="image/*" capture="environment" class="hidden">
-      <label class="btn secondary">＋ Add Photos<input id="picker" type="file" accept="image/*" multiple class="hidden"></label>
+      <button type="button" class="secondary" onclick="inspectPhoto(0)">🔍 View & Inspect Photos</button>\n      <label class="btn secondary">＋ Add Photos<input id="picker" type="file" accept="image/*" multiple class="hidden"></label>
     </div>
     <div class="hint" style="margin-top:8px">The camera stays open after each shot. Photos save automatically to this lot. Tap Done when finished. Drag photos to reorder; tap “Set Main” for the primary image.</div>
     <div id="photos" class="photos"></div>
@@ -100,6 +101,7 @@
 </div>
 
 <dialog id="cameraDialog" class="cameraDialog" aria-labelledby="cameraHeading"><h3 id="cameraHeading">Photos for this lot</h3><video id="cameraPreview" autoplay muted playsinline aria-label="Live camera preview"></video><p id="cameraStatus" class="hint" role="status" aria-live="polite"></p><div class="row"><button id="capturePhoto" class="primary" onclick="capturePhoto()" disabled>Take &amp; Save Photo</button><button class="secondary" onclick="closeCamera()">Done</button><button class="secondary" onclick="closeCamera();$('camera').click()">Use device camera instead</button></div></dialog>
+<dialog id="inspectDialog" class="inspectDialog" aria-label="Inspect lot photos"><h3 id="inspectHeading">Inspect photo</h3><img id="inspectImage" alt="Enlarged lot photo"><p id="inspectCount" class="hint"></p><div class="row"><button class="secondary" onclick="stepInspect(-1)">← Previous</button><button class="secondary" onclick="stepInspect(1)">Next →</button><button class="secondary" onclick="setMain(inspectIndex);showInspect()">★ Set Main</button><button class="danger" onclick="deleteInspectedPhoto()">Delete</button><button class="secondary" onclick="closeInspect()">Done</button></div></dialog>
 <script src="./storage.js"></script>
 <script>
 let photos=[], lots={}, dragIndex=null, formRevision=0;
@@ -232,7 +234,7 @@ async function capturePhoto(){
     if(revision!==formRevision)return;
     photos.push({data,main:photos.length===0});queueCurrentAI();renderPhotos();
     $('cameraStatus').textContent='Saving photo…';await persist();saved=true;
-    if(session===cameraSession)$('cameraStatus').textContent=`Photo saved · ${photos.length} in this lot. Ready for the next photo.`;
+    if(session===cameraSession)$('cameraStatus').textContent=`Photo saved · ${photos.length} in this lot. Ready for the next photo. Tap Done to inspect it.`;
   }catch{if(session===cameraSession)$('cameraStatus').textContent='Photo is still on this screen but could not be saved. Tap Done and export a backup before continuing.';return}
   finally{if(session===cameraSession)button.disabled=!saved}
 }
@@ -248,12 +250,29 @@ function addFiles(files){
 }
 $('camera').onchange=e=>{addFiles(e.target.files);e.target.value=''};
 $('picker').onchange=e=>{addFiles(e.target.files);e.target.value=''};
+let inspectIndex=0;
+function inspectPhoto(i=0){
+  if(!photos.length){alert('No photos in this lot yet. Take a photo first.');return}
+  inspectIndex=Math.max(0,Math.min(i,photos.length-1));
+  if(!$('inspectDialog').open)$('inspectDialog').showModal();
+  showInspect();
+}
+function showInspect(){
+  if(!photos.length){closeInspect();return}
+  inspectIndex=(inspectIndex+photos.length)%photos.length;
+  $('inspectImage').src=photos[inspectIndex].data;
+  $('inspectHeading').textContent='Inspect Lot '+$('lotNo').textContent;
+  $('inspectCount').textContent='Photo '+(inspectIndex+1)+' of '+photos.length+(photos[inspectIndex].main?' · Main photo':'')+' · Pinch to zoom';
+}
+function stepInspect(delta){inspectIndex+=delta;showInspect()}
+function closeInspect(){if($('inspectDialog').open)$('inspectDialog').close()}
+function deleteInspectedPhoto(){if(!confirm('Delete this photo from the lot?'))return;delPhoto(inspectIndex);showInspect()}
 function renderPhotos(){
   let el=$('photos');el.innerHTML='';
   photos.forEach((p,i)=>{
     let d=document.createElement('div');d.className='photo '+(p.main?'main':'');d.draggable=true;
     d.ondragstart=()=>dragIndex=i;d.ondragover=e=>e.preventDefault();d.ondrop=()=>{if(dragIndex===null)return;let x=photos.splice(dragIndex,1)[0];photos.splice(i,0,x);dragIndex=null;renderPhotos();autoSave()};
-    d.innerHTML=`${p.main?'<span class="badge">MAIN</span>':''}<span class="drag">↕</span><img alt="Lot photo" src="${p.data}"><div class="actions"><button onclick="setMain(${i})">★ Set Main</button><button onclick="delPhoto(${i})">Delete</button></div>`;
+    d.innerHTML=`${p.main?'<span class="badge">MAIN</span>':''}<span class="drag">↕</span><img alt="Lot photo" src="${p.data}" onclick="inspectPhoto(${i})" style="cursor:zoom-in"><div class="actions"><button onclick="inspectPhoto(${i})">🔍 Inspect</button><button onclick="setMain(${i})">★ Set Main</button><button onclick="delPhoto(${i})">Delete</button></div>`;
     el.appendChild(d);
   });
 }
