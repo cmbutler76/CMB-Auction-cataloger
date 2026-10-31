@@ -48,7 +48,7 @@
     <button id="createAuction" class="primary" style="margin-top:10px">＋ Create Auction</button>
     <p class="hint">Each auction keeps its own lots, photos and numbering. Changes save automatically on this device and browser. Export a backup before changing devices or clearing browser data.</p>
     <div class="aiStatus"><strong>Photos now, descriptions later</strong><p class="hint">Photos save on this device, organized by auction and lot. New photos join the AI queue. Keep the cataloger open when internet returns; queued descriptions will run automatically. You can also start them below. Existing descriptions are kept.</p><label><input id="autoQueuedAI" type="checkbox" style="display:inline;width:auto" checked> Run queued AI when internet returns</label><button id="runQueue" class="secondary" onclick="processAIQueue()">Describe Saved Lots</button><p id="queueStatus" role="status" aria-live="polite" class="hint">Checking saved lots…</p></div>
-    <button id="viewLotsButton" class="secondary" type="button" onclick="showCompletedLots()">📋 View Completed Lots</button>
+    <button id="viewLotsButton" class="secondary" type="button" onclick="toggleCompletedLots()">📋 View Completed Lots</button>
     <details id="completedLotsPanel"><summary id="lotCount">Saved lots</summary><div id="savedLots" class="row" style="margin-top:10px"></div></details>
   </div>
   <div class="card">
@@ -290,10 +290,12 @@ function persist(){
 }
 let autoSaveTimer=null;
 function autoSave(){clearTimeout(autoSaveTimer);autoSaveTimer=setTimeout(()=>{autoSaveTimer=null;persist().catch(()=>{})},450)}
-function showCompletedLots(){
-  const panel=$('completedLotsPanel');panel.open=true;
-  renderLotList();panel.scrollIntoView({behavior:'smooth',block:'start'});
+function toggleCompletedLots(){
+  const panel=$('completedLotsPanel');panel.open=!panel.open;
+  $('viewLotsButton').textContent=panel.open?'✕ Close Completed Lots':'📋 View Completed Lots';
+  if(panel.open){renderLotList();panel.scrollIntoView({behavior:'smooth',block:'start'});}
 }
+$('completedLotsPanel').addEventListener('toggle',()=>{$('viewLotsButton').textContent=$('completedLotsPanel').open?'✕ Close Completed Lots':'📋 View Completed Lots'});
 function renderLotList(){
   $('savedLots').innerHTML='';Object.values(lots).sort((a,b)=>a.lot-b.lot).forEach(l=>{
     const b=document.createElement('button');b.className='secondary';b.textContent=`Lot ${l.lot} · ${l.title||'Untitled'}`;b.onclick=async()=>{await openLot(l.lot);window.scrollTo({top:0,behavior:'smooth'});};$('savedLots').appendChild(b);
