@@ -377,11 +377,28 @@ $('startLot').onchange=e=>{const n=Math.max(1,parseInt(e.target.value||'1',10));
 $('auctionSelect').onchange=async e=>{const id=e.target.value;try{await persist();const a=await CatalogStorage.get(id);if(!a)throw Error();await useAuction(a);await persist()}catch{$('auctionSelect').value=auction.id}};
 $('renameAuction').onclick=async()=>{const name=$('auctionName').value.trim();if(!name)return;auction.name=name;try{await persist();await refreshAuctions()}catch{}};
 $('createAuction').onclick=createAuction;
-function exportData(){
+async function exportData(){
+  if(!auction){alert('Auction is still loading. Try again in a moment.');return}
   const draft=snapshotLot(),backup={version:2,auction:{...auction,lots:{...lots},draft,currentLot:draft.lot}};
   if(hasContent(draft))backup.auction.lots[draft.lot]=draft;
-  const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'}),a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download=`CMB-${(auction?.name||'Auction').replace(/[^a-z0-9-]/gi,'-')}-Backup.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  const filename=`CMB-${(auction.name||'Auction').replace(/[^a-z0-9-]/gi,'-')}-Backup.json`;
+  const blob=new Blob([JSON.stringify(backup)],{type:'application/json'});
+  const file=new File([blob],filename,{type:'application/json'});
+  const status=$('status');
+  if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+    try{
+      await navigator.share({files:[file],title:'CMB Auction Backup'});
+      status.textContent='Backup shared. Confirm it appears in Files before making changes.';
+      return;
+    }catch(err){
+      if(err?.name==='AbortError'){status.textContent='Backup sharing cancelled. Your auction remains unchanged.';return}
+      status.textContent='Sharing unavailable. Trying download instead.';
+    }
+  }
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download=filename;document.body.appendChild(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  status.textContent='Backup downloaded. Open the download and use Share → Save to Files.';
 }
 $('importFile').onchange=e=>{
   const f=e.target.files[0];if(!f)return;const r=new FileReader();
