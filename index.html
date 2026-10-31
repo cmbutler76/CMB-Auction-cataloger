@@ -48,7 +48,8 @@
     <button id="createAuction" class="primary" style="margin-top:10px">＋ Create Auction</button>
     <p class="hint">Each auction keeps its own lots, photos and numbering. Changes save automatically on this device and browser. Export a backup before changing devices or clearing browser data.</p>
     <div class="aiStatus"><strong>Photos now, descriptions later</strong><p class="hint">Photos save on this device, organized by auction and lot. New photos join the AI queue. Keep the cataloger open when internet returns; queued descriptions will run automatically. You can also start them below. Existing descriptions are kept.</p><label><input id="autoQueuedAI" type="checkbox" style="display:inline;width:auto" checked> Run queued AI when internet returns</label><button id="runQueue" class="secondary" onclick="processAIQueue()">Describe Saved Lots</button><p id="queueStatus" role="status" aria-live="polite" class="hint">Checking saved lots…</p></div>
-    <details><summary id="lotCount">Saved lots</summary><div id="savedLots" class="row" style="margin-top:10px"></div></details>
+    <button id="viewLotsButton" class="secondary" type="button" onclick="showCompletedLots()">📋 View Completed Lots</button>
+    <details id="completedLotsPanel"><summary id="lotCount">Saved lots</summary><div id="savedLots" class="row" style="margin-top:10px"></div></details>
   </div>
   <div class="card">
     <div class="row" style="justify-content:space-between;align-items:center">
@@ -225,9 +226,9 @@ async function capturePhoto(){
   if(!video.videoWidth||!video.videoHeight){$('cameraStatus').textContent='Camera is getting ready. Try again in a moment.';return}
   button.disabled=true;let saved=false;const revision=formRevision,session=cameraSession;
   try{
-    const canvas=document.createElement('canvas');canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+    const canvas=document.createElement('canvas');const scale=Math.min(1,1600/Math.max(video.videoWidth,video.videoHeight));canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));
     const context=canvas.getContext('2d');if(!context)throw Error('Camera image is unavailable.');
-    context.drawImage(video,0,0);const data=canvas.toDataURL('image/jpeg',.9);canvas.width=canvas.height=1;
+    context.drawImage(video,0,0);const data=canvas.toDataURL('image/jpeg',.76);canvas.width=canvas.height=1;
     if(revision!==formRevision)return;
     photos.push({data,main:photos.length===0});queueCurrentAI();renderPhotos();
     $('cameraStatus').textContent='Saving photo…';await persist();saved=true;
@@ -241,7 +242,7 @@ function addFiles(files){
   [...files].forEach(f=>{
     if(!f.type.startsWith('image/')) return;
     const r=new FileReader();
-    r.onload=()=>{if(uploadRevision!==formRevision){$('status').textContent='The lot changed before photos finished loading. Add those photos again.';return}photos.push({data:r.result,main:photos.length===0});queueCurrentAI();renderPhotos();autoSave()};
+    r.onload=async()=>{try{const data=await resizePhotoForAI(r.result,1600,.76);if(uploadRevision!==formRevision){$('status').textContent='The lot changed before photos finished loading. Add those photos again.';return}photos.push({data,main:photos.length===0});queueCurrentAI();renderPhotos();autoSave()}catch{$('status').textContent='Photo could not be processed. Please try again.'}};
     r.readAsDataURL(f);
   });
 }
@@ -276,6 +277,7 @@ function snapshotLot(){
 }
 function hasContent(lot){return lot.photos.length || ['title','description','markings','condition','warningNotes','low','high','valuationNotes'].some(f=>lot[f]) || lot.comps.some(c=>c.title||c.price||c.source)}
 function persist(){
+  clearTimeout(autoSaveTimer);autoSaveTimer=null;
   if(!ready||!auction)return Promise.resolve();
   const draft=snapshotLot();auction.draft=draft;auction.currentLot=draft.lot;
   if(hasContent(draft)||lots[draft.lot])lots[draft.lot]=draft;
@@ -286,10 +288,15 @@ function persist(){
   task.then(()=>{if(saveQueue===task)$('status').textContent='Saved on this device.';renderLotList();updateQueueStatus();const option=[...$('auctionSelect').querySelectorAll('option')].find(o=>o.value===auction.id);if(option)option.textContent=`${auction.name} (${Object.keys(lots).length} lots)`},()=>{$('status').textContent='SAVE FAILED — storage may be full or unavailable. Export a backup now. Your work is still on this screen.'});
   return task;
 }
-function autoSave(){persist().catch(()=>{})}
+let autoSaveTimer=null;
+function autoSave(){clearTimeout(autoSaveTimer);autoSaveTimer=setTimeout(()=>{autoSaveTimer=null;persist().catch(()=>{})},450)}
+function showCompletedLots(){
+  const panel=$('completedLotsPanel');panel.open=true;
+  renderLotList();panel.scrollIntoView({behavior:'smooth',block:'start'});
+}
 function renderLotList(){
   $('savedLots').innerHTML='';Object.values(lots).sort((a,b)=>a.lot-b.lot).forEach(l=>{
-    const b=document.createElement('button');b.className='secondary';b.textContent=`Lot ${l.lot} · ${l.title||'Untitled'}`;b.onclick=()=>openLot(l.lot);$('savedLots').appendChild(b);
+    const b=document.createElement('button');b.className='secondary';b.textContent=`Lot ${l.lot} · ${l.title||'Untitled'}`;b.onclick=async()=>{await openLot(l.lot);window.scrollTo({top:0,behavior:'smooth'});};$('savedLots').appendChild(b);
   });
   $('lotCount').textContent=`${Object.keys(lots).length} lots in this auction`;
 }
