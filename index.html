@@ -20,14 +20,14 @@
     button:disabled{opacity:.6;cursor:wait}.primary{background:#1d4ed8;color:white}.secondary{background:#e8edf5;color:#17202a}.danger{background:#fee2e2;color:#7f1d1d}
     .row{display:flex;gap:10px;flex-wrap:wrap}.photos{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-top:12px}
     .photo{position:relative;border:2px solid #e5e7eb;border-radius:12px;overflow:hidden;background:#eee;min-height:130px}.photo.main{border:3px solid #1d4ed8}
-    .photo img{width:100%;height:130px;object-fit:cover;display:block}.photo .actions{display:flex;gap:4px;padding:6px;background:white}.photo .actions button{padding:7px;font-size:12px;flex:1}
+    .photo img{width:100%;height:130px;object-fit:contain;display:block;background:#111}.photo .actions{display:flex;gap:4px;padding:6px;background:white}.photo .actions button{padding:7px;font-size:12px;flex:1}
     .badge{position:absolute;top:7px;left:7px;background:#1d4ed8;color:white;padding:4px 7px;border-radius:8px;font-size:12px}.drag{position:absolute;right:7px;top:7px;background:#fff;padding:3px 7px;border-radius:8px}
     label{display:block;font-weight:700;margin:10px 0 5px}input,textarea,select{width:100%;padding:12px;border:1px solid #cfd5df;border-radius:10px;font:inherit}textarea{min-height:100px}
     .est{display:grid;grid-template-columns:1fr 1fr;gap:12px}.footer{position:sticky;bottom:0;background:#f5f6f8ee;backdrop-filter:blur(8px);padding:10px 0}.saveNext{width:100%;font-size:19px;padding:16px}
     .hint{font-size:13px;color:#667085}.comp{border-top:1px solid #eee;padding:10px 0}.warning{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:10px;margin:7px 0}
     .aiStatus{margin-top:10px;padding:10px;border-radius:10px;background:#f8fafc}.hidden{display:none}.ok{background:#ecfdf3;color:#166534}
     .cameraDialog{width:min(96vw,760px);max-height:95dvh;border:0;border-radius:16px;padding:16px}.cameraDialog::backdrop{background:#000b}.cameraDialog video{display:block;width:100%;max-height:62dvh;background:#111;border-radius:12px;object-fit:contain}.cameraDialog .row{margin-top:12px}.cameraDialog .hint{min-height:2em}
-    .inspectDialog{width:min(96vw,850px);max-height:94dvh;border:0;border-radius:16px;padding:14px;overflow-y:auto}.inspectDialog::backdrop{background:#000d}.inspectViewport{height:min(57dvh,650px);width:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#111;border-radius:10px;touch-action:none}.inspectViewport img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;transform-origin:center center;user-select:none;-webkit-user-drag:none}.inspectDialog .row{margin-top:10px}
+    .inspectDialog{width:min(96vw,850px);max-height:94dvh;border:0;border-radius:16px;padding:14px;overflow-y:auto}.inspectDialog::backdrop{background:#000d}.inspectViewport{height:min(57dvh,650px);width:100%;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#111;border-radius:10px;touch-action:none}.inspectViewport img{display:block;width:100%;height:100%;max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;user-select:none;-webkit-user-drag:none}.inspectDialog .row{margin-top:10px}
     @media(max-width:600px){.lot{font-size:27px}.app{padding:12px}.top{align-items:flex-start;flex-direction:column}.est{grid-template-columns:1fr}}
   </style>
 </head>
@@ -230,7 +230,7 @@ async function capturePhoto(){
   try{
     const canvas=document.createElement('canvas');const scale=Math.min(1,1600/Math.max(video.videoWidth,video.videoHeight));canvas.width=Math.max(1,Math.round(video.videoWidth*scale));canvas.height=Math.max(1,Math.round(video.videoHeight*scale));
     const context=canvas.getContext('2d');if(!context)throw Error('Camera image is unavailable.');
-    context.drawImage(video,0,0);const data=canvas.toDataURL('image/jpeg',.76);canvas.width=canvas.height=1;
+    context.drawImage(video,0,0,video.videoWidth,video.videoHeight,0,0,canvas.width,canvas.height);const data=canvas.toDataURL('image/jpeg',.82);canvas.width=canvas.height=1;
     if(revision!==formRevision)return;
     photos.push({data,main:photos.length===0});queueCurrentAI();renderPhotos();
     $('cameraStatus').textContent='Saving photo…';await persist();saved=true;
